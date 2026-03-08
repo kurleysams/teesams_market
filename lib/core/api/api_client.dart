@@ -1,11 +1,20 @@
+import 'package:dio/dio.dart';
+
+import '../config/app_config.dart';
+
 class ApiClient {
   final Dio dio;
 
-  ApiClient(String baseUrl, String tenantSlug)
+  ApiClient({required String tenantSlug, String? authToken})
     : dio = Dio(
         BaseOptions(
-          baseUrl: baseUrl,
-          headers: {"X-Tenant": tenantSlug, "Content-Type": "application/json"},
+          baseUrl: AppConfig.baseUrl,
+          headers: {
+            'X-Tenant': tenantSlug,
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            if (authToken != null) 'Authorization': 'Bearer $authToken',
+          },
         ),
       );
 }

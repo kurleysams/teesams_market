@@ -1,4 +1,4 @@
-package com.example.teesams_market
+package com.teesams.teesams_market
 
 import io.flutter.embedding.android.FlutterActivity
 
