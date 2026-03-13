@@ -17,13 +17,21 @@ class Category {
 
   factory Category.fromJson(Map<String, dynamic> json) {
     return Category(
-      id: json['id'] as int,
-      name: json['name'] as String? ?? '',
-      slug: json['slug'] as String? ?? '',
-      sortOrder: json['sort_order'] as int? ?? 0,
+      id: _toInt(json['id']) ?? 0,
+      name: json['name']?.toString() ?? '',
+      slug: json['slug']?.toString() ?? '',
+      sortOrder: _toInt(json['sort_order']) ?? 0,
       products: ((json['products'] as List?) ?? const [])
           .map((e) => Product.fromJson(Map<String, dynamic>.from(e as Map)))
           .toList(),
     );
+  }
+
+  static int? _toInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value);
+    return null;
   }
 }

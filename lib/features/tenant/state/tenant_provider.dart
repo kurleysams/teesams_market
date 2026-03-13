@@ -12,22 +12,45 @@ class TenantProvider extends ChangeNotifier {
     displayName: supportedTenants.first.displayName,
   );
 
+  bool _isLoading = true;
+  String? _errorMessage;
+
   Tenant get tenant => _tenant;
   String get slug => _tenant.slug;
 
+  bool get isLoading => _isLoading;
+  String? get errorMessage => _errorMessage;
+
   Future<void> load() async {
-    final slug = await _tenantService.loadTenantSlug();
-    final found = supportedTenants.firstWhere(
-      (t) => t.slug == slug,
-      orElse: () => supportedTenants.first,
-    );
-    _tenant = Tenant(slug: found.slug, displayName: found.displayName);
-    notifyListeners();
+    try {
+      _isLoading = true;
+      _errorMessage = null;
+      notifyListeners();
+
+      final slug = await _tenantService.loadTenantSlug();
+
+      final found = supportedTenants.firstWhere(
+        (t) => t.slug == slug,
+        orElse: () => supportedTenants.first,
+      );
+
+      _tenant = Tenant(slug: found.slug, displayName: found.displayName);
+    } catch (e) {
+      _errorMessage = 'Failed to load store configuration.';
+      debugPrint('Tenant load error: $e');
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 
   Future<void> select(Tenant tenant) async {
-    _tenant = tenant;
-    await _tenantService.saveTenantSlug(tenant.slug);
-    notifyListeners();
+    try {
+      _tenant = tenant;
+      await _tenantService.saveTenantSlug(tenant.slug);
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Tenant select error: $e');
+    }
   }
 }

@@ -28,15 +28,23 @@ class Product {
 
   factory Product.fromJson(Map<String, dynamic> json) {
     return Product(
-      id: json['id'] as int,
-      name: json['name'] as String? ?? '',
-      slug: json['slug'] as String? ?? '',
-      description: json['description'] as String?,
-      imageUrl: json['image_url'] as String?,
-      sortOrder: json['sort_order'] as int? ?? 0,
+      id: _toInt(json['id']) ?? 0,
+      name: json['name']?.toString() ?? '',
+      slug: json['slug']?.toString() ?? '',
+      description: json['description']?.toString(),
+      imageUrl: json['image_url']?.toString(),
+      sortOrder: _toInt(json['sort_order']) ?? 0,
       variants: ((json['variants'] as List?) ?? const [])
           .map((e) => Variant.fromJson(Map<String, dynamic>.from(e as Map)))
           .toList(),
     );
+  }
+
+  static int? _toInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value);
+    return null;
   }
 }
