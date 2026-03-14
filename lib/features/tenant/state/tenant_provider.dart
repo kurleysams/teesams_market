@@ -1,56 +1,118 @@
 import 'package:flutter/foundation.dart';
 
-import '../../../core/config/tenant_config.dart';
-import '../../../core/services/tenant_service.dart';
 import '../models/tenant.dart';
+import '../services/tenant_service.dart';
 
 class TenantProvider extends ChangeNotifier {
-  final TenantService _tenantService = TenantService();
+  final TenantService _service = const TenantService();
 
-  Tenant _tenant = Tenant(
-    slug: supportedTenants.first.slug,
-    displayName: supportedTenants.first.displayName,
-  );
+  Tenant? _tenant;
+  List<Tenant> _tenants = [];
+  bool _loading = false;
+  String? _error;
+  String _slug = 'fishseafoods';
 
-  bool _isLoading = true;
-  String? _errorMessage;
-
-  Tenant get tenant => _tenant;
-  String get slug => _tenant.slug;
-
-  bool get isLoading => _isLoading;
-  String? get errorMessage => _errorMessage;
-
-  Future<void> load() async {
-    try {
-      _isLoading = true;
-      _errorMessage = null;
-      notifyListeners();
-
-      final slug = await _tenantService.loadTenantSlug();
-
-      final found = supportedTenants.firstWhere(
-        (t) => t.slug == slug,
-        orElse: () => supportedTenants.first,
+  Tenant get tenant =>
+      _tenant ??
+      Tenant(
+        id: 0,
+        name: 'Teesams Market',
+        slug: _slug,
+        tagline: 'Browse • Search • Cart • Checkout',
+        logoUrl: null,
+        bannerUrl: null,
+        primaryColor: null,
+        isActive: true,
+        sortOrder: 0,
       );
 
-      _tenant = Tenant(slug: found.slug, displayName: found.displayName);
+  List<Tenant> get tenants => _tenants;
+
+  bool get loading => _loading;
+  bool get isLoading => _loading;
+
+  String? get error => _error;
+  String? get errorMessage => _error;
+
+  String get slug => _tenant?.slug ?? _slug;
+
+  Future<void> loadTenant({String? tenantSlug}) async {
+    _loading = true;
+    _error = null;
+
+    if (tenantSlug != null && tenantSlug.trim().isNotEmpty) {
+      _slug = tenantSlug.trim();
+    }
+
+    notifyListeners();
+
+    try {
+      final currentTenant = await _service.fetchCurrentTenant(
+        tenantSlug: _slug,
+      );
+
+      _tenant = currentTenant;
+      _slug = currentTenant.slug;
+
+      final availableTenants = await _service.fetchTenants(tenantSlug: _slug);
+
+      _tenants = availableTenants;
+
+      if (_tenants.every((t) => t.id != _tenant!.id)) {
+        _tentsInsertCurrent();
+      }
     } catch (e) {
-      _errorMessage = 'Failed to load store configuration.';
-      debugPrint('Tenant load error: $e');
+      _error = 'Failed to load tenant: $e';
     } finally {
-      _isLoading = false;
+      _loading = false;
       notifyListeners();
     }
   }
 
-  Future<void> select(Tenant tenant) async {
+  Future<void> load() async {
+    await loadTenant();
+  }
+
+  Future<void> loadTenants() async {
     try {
-      _tenant = tenant;
-      await _tenantService.saveTenantSlug(tenant.slug);
+      final availableTenants = await _service.fetchTenants(tenantSlug: _slug);
+
+      _tenants = availableTenants;
+
+      if (_tenant != null && _tenants.every((t) => t.id != _tenant!.id)) {
+        _tentsInsertCurrent();
+      }
+
       notifyListeners();
     } catch (e) {
-      debugPrint('Tenant select error: $e');
+      _error = 'Failed to load stores: $e';
+      notifyListeners();
     }
+  }
+
+  Future<void> switchTenant(Tenant selectedTenant) async {
+    if (_tenant?.id == selectedTenant.id) return;
+
+    _tenant = selectedTenant;
+    _slug = selectedTenant.slug;
+    notifyListeners();
+
+    await loadTenant(tenantSlug: selectedTenant.slug);
+  }
+
+  void setTenant(Tenant tenant) {
+    _tenant = tenant;
+    _slug = tenant.slug;
+    notifyListeners();
+  }
+
+  void clearError() {
+    _error = null;
+    notifyListeners();
+  }
+
+  void _tentsInsertCurrent() {
+    if (_tenant == null) return;
+    _tenants = [_tenant!, ..._tenants];
   }
 }

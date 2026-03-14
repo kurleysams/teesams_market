@@ -2,6 +2,7 @@ import 'variant.dart';
 
 class Product {
   final int id;
+  final int? categoryId;
   final String name;
   final String slug;
   final String? description;
@@ -11,6 +12,7 @@ class Product {
 
   const Product({
     required this.id,
+    required this.categoryId,
     required this.name,
     required this.slug,
     required this.description,
@@ -29,6 +31,7 @@ class Product {
   factory Product.fromJson(Map<String, dynamic> json) {
     return Product(
       id: _toInt(json['id']) ?? 0,
+      categoryId: _toInt(json['category_id']),
       name: json['name']?.toString() ?? '',
       slug: json['slug']?.toString() ?? '',
       description: json['description']?.toString(),

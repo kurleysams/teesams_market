@@ -3,10 +3,11 @@ import 'package:provider/provider.dart';
 
 import 'core/theme/app_theme.dart';
 import 'features/cart/state/cart_provider.dart';
-import 'features/catalog/state/catalog_provider.dart';
 import 'features/catalog/screens/catalog_screen.dart';
+import 'features/catalog/state/catalog_provider.dart';
 import 'features/orders/state/order_provider.dart';
 import 'features/payments/state/payment_provider.dart';
+import 'features/tenant/screens/tenant_selector.dart';
 import 'features/tenant/state/tenant_provider.dart';
 
 class TeesamsMarketApp extends StatelessWidget {
@@ -17,15 +18,10 @@ class TeesamsMarketApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider<TenantProvider>(
-          create: (_) => TenantProvider()..load(),
+          create: (_) => TenantProvider()..loadTenant(),
         ),
-        ChangeNotifierProxyProvider<TenantProvider, CatalogProvider>(
+        ChangeNotifierProvider<CatalogProvider>(
           create: (_) => CatalogProvider(),
-          update: (_, tenant, provider) {
-            final catalogProvider = provider ?? CatalogProvider();
-            catalogProvider.bindTenant(tenant);
-            return catalogProvider;
-          },
         ),
         ChangeNotifierProvider<CartProvider>(create: (_) => CartProvider()),
         ChangeNotifierProxyProvider<TenantProvider, OrderProvider>(
@@ -50,24 +46,47 @@ class TeesamsMarketApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light(),
         home: const _AppEntry(),
+        routes: {'/tenant-selector': (_) => const TenantSelector()},
       ),
     );
   }
 }
 
-class _AppEntry extends StatelessWidget {
+class _AppEntry extends StatefulWidget {
   const _AppEntry();
+
+  @override
+  State<_AppEntry> createState() => _AppEntryState();
+}
+
+class _AppEntryState extends State<_AppEntry> {
+  String? _lastTenantSlug;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    final tenantProvider = context.watch<TenantProvider>();
+    final catalogProvider = context.read<CatalogProvider>();
+    final tenant = tenantProvider.tenant;
+
+    if (tenant != null && tenant.slug != _lastTenantSlug) {
+      _lastTenantSlug = tenant.slug;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        catalogProvider.loadCatalogForTenant(tenant.slug);
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final tenantProvider = context.watch<TenantProvider>();
 
-    if (tenantProvider.isLoading) {
+    if (tenantProvider.loading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    if (tenantProvider.errorMessage != null &&
-        tenantProvider.errorMessage!.isNotEmpty) {
+    if (tenantProvider.error != null && tenantProvider.error!.isNotEmpty) {
       return Scaffold(
         body: Center(
           child: Padding(
@@ -83,10 +102,10 @@ class _AppEntry extends StatelessWidget {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 8),
-                Text(tenantProvider.errorMessage!, textAlign: TextAlign.center),
+                Text(tenantProvider.error!, textAlign: TextAlign.center),
                 const SizedBox(height: 16),
                 ElevatedButton(
-                  onPressed: () => tenantProvider.load(),
+                  onPressed: () => tenantProvider.loadTenant(),
                   child: const Text('Try again'),
                 ),
               ],

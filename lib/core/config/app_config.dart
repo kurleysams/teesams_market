@@ -1,5 +1,5 @@
 class AppConfig {
-  static const String baseUrl = 'http://foods.teesams.co.uk/api';
+  static const String baseUrl = 'https://foods.teesams.co.uk/api';
   static const String stripePublishableKey = 'pk_test_replace_me';
   static const String stripeMerchantIdentifier =
       'merchant.co.uk.teesams.market';

@@ -1,34 +1,34 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../core/config/tenant_config.dart';
-import '../models/tenant.dart';
 import '../state/tenant_provider.dart';
 
-class TenantSelectorSheet extends StatelessWidget {
-  const TenantSelectorSheet({super.key});
+class TenantSelector extends StatelessWidget {
+  const TenantSelector({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<TenantProvider>();
+    final tenantProvider = context.watch<TenantProvider>();
 
-    return SafeArea(
-      child: ListView(
-        shrinkWrap: true,
-        children: supportedTenants.map((t) {
-          final selected = provider.slug == t.slug;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Select Store')),
+      body: ListView.builder(
+        itemCount: tenantProvider.tenants.length,
+        itemBuilder: (context, index) {
+          final tenant = tenantProvider.tenants[index];
+
           return ListTile(
-            title: Text(t.displayName),
-            subtitle: Text(t.slug),
-            trailing: selected ? const Icon(Icons.check_circle) : null,
-            onTap: () async {
-              await provider.select(
-                Tenant(slug: t.slug, displayName: t.displayName),
+            title: Text(tenant.name),
+            subtitle: Text(tenant.slug),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Selected ${tenant.name}')),
               );
-              if (context.mounted) Navigator.pop(context);
+              Navigator.pop(context);
             },
           );
-        }).toList(),
+        },
       ),
     );
   }
