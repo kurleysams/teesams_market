@@ -18,15 +18,14 @@ class TenantProvider extends ChangeNotifier {
         id: 0,
         name: 'Teesams Market',
         slug: _slug,
+        currency: 'GBP',
         tagline: 'Browse • Search • Cart • Checkout',
         logoUrl: null,
         bannerUrl: null,
         primaryColor: null,
-        isActive: true,
-        sortOrder: 0,
       );
 
-  List<Tenant> get tenants => _tenants;
+  List<Tenant> get tenants => List.unmodifiable(_tenants);
 
   bool get loading => _loading;
   bool get isLoading => _loading;
@@ -56,10 +55,10 @@ class TenantProvider extends ChangeNotifier {
 
       final availableTenants = await _service.fetchTenants(tenantSlug: _slug);
 
-      _tenants = availableTenants;
+      _tenants = List<Tenant>.from(availableTenants);
 
-      if (_tenants.every((t) => t.id != _tenant!.id)) {
-        _tentsInsertCurrent();
+      if (_tenant != null && _tenants.every((t) => t.id != _tenant!.id)) {
+        _insertCurrentTenant();
       }
     } catch (e) {
       _error = 'Failed to load tenant: $e';
@@ -77,10 +76,10 @@ class TenantProvider extends ChangeNotifier {
     try {
       final availableTenants = await _service.fetchTenants(tenantSlug: _slug);
 
-      _tenants = availableTenants;
+      _tenants = List<Tenant>.from(availableTenants);
 
       if (_tenant != null && _tenants.every((t) => t.id != _tenant!.id)) {
-        _tentsInsertCurrent();
+        _insertCurrentTenant();
       }
 
       notifyListeners();
@@ -92,11 +91,6 @@ class TenantProvider extends ChangeNotifier {
 
   Future<void> switchTenant(Tenant selectedTenant) async {
     if (_tenant?.id == selectedTenant.id) return;
-
-    _tenant = selectedTenant;
-    _slug = selectedTenant.slug;
-    notifyListeners();
-
     await loadTenant(tenantSlug: selectedTenant.slug);
   }
 
@@ -111,7 +105,7 @@ class TenantProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _tentsInsertCurrent() {
+  void _insertCurrentTenant() {
     if (_tenant == null) return;
     _tenants = [_tenant!, ..._tenants];
   }

@@ -43,6 +43,19 @@ class Product {
     );
   }
 
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'category_id': categoryId,
+      'name': name,
+      'slug': slug,
+      'description': description,
+      'image_url': imageUrl,
+      'sort_order': sortOrder,
+      'variants': variants.map((e) => e.toJson()).toList(),
+    };
+  }
+
   static int? _toInt(dynamic value) {
     if (value == null) return null;
     if (value is int) return value;

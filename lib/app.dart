@@ -2,13 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'core/theme/app_theme.dart';
+import 'features/cart/screens/cart_screen.dart';
 import 'features/cart/state/cart_provider.dart';
 import 'features/catalog/screens/catalog_screen.dart';
+import 'features/catalog/screens/product_details_screen.dart';
 import 'features/catalog/state/catalog_provider.dart';
+import 'features/orders/screens/checkout_screen.dart';
+import 'features/orders/screens/order_success_screen.dart';
 import 'features/orders/state/order_provider.dart';
 import 'features/payments/state/payment_provider.dart';
 import 'features/tenant/screens/tenant_selector.dart';
 import 'features/tenant/state/tenant_provider.dart';
+import 'features/catalog/models/product.dart';
 
 class TeesamsMarketApp extends StatelessWidget {
   const TeesamsMarketApp({super.key});
@@ -23,15 +28,10 @@ class TeesamsMarketApp extends StatelessWidget {
         ChangeNotifierProvider<CatalogProvider>(
           create: (_) => CatalogProvider(),
         ),
-        ChangeNotifierProvider<CartProvider>(create: (_) => CartProvider()),
-        ChangeNotifierProxyProvider<TenantProvider, OrderProvider>(
-          create: (_) => OrderProvider(),
-          update: (_, tenant, provider) {
-            final orderProvider = provider ?? OrderProvider();
-            orderProvider.bindTenant(tenant);
-            return orderProvider;
-          },
+        ChangeNotifierProvider<CartProvider>(
+          create: (_) => CartProvider()..loadCart(),
         ),
+        ChangeNotifierProvider<OrderProvider>(create: (_) => OrderProvider()),
         ChangeNotifierProxyProvider<TenantProvider, PaymentProvider>(
           create: (_) => PaymentProvider(),
           update: (_, tenant, provider) {
@@ -46,7 +46,23 @@ class TeesamsMarketApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light(),
         home: const _AppEntry(),
-        routes: {'/tenant-selector': (_) => const TenantSelector()},
+        routes: {
+          '/tenant-selector': (_) => const TenantSelector(),
+          '/cart': (_) => const CartScreen(),
+          '/checkout': (_) => const CheckoutScreen(),
+          '/order-success': (_) => const OrderSuccessScreen(),
+        },
+        onGenerateRoute: (settings) {
+          if (settings.name == '/product-details') {
+            final args = settings.arguments;
+            if (args is Product) {
+              return MaterialPageRoute(
+                builder: (_) => ProductDetailsScreen(product: args),
+              );
+            }
+          }
+          return null;
+        },
       ),
     );
   }

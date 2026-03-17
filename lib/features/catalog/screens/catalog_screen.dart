@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
-import '../../tenant/state/tenant_provider.dart';
+import '../../../shared/widgets/cart_icon_button.dart';
+import '../../../core/config/app_config.dart';
 import '../../../shared/components/store_header.dart';
+import '../../tenant/state/tenant_provider.dart';
 import '../state/catalog_provider.dart';
 
 class CatalogScreen extends StatefulWidget {
@@ -25,6 +26,24 @@ class _CatalogScreenState extends State<CatalogScreen> {
     Navigator.pushNamed(context, '/tenant-selector');
   }
 
+  String? _normalizeUrl(String? value) {
+    if (value == null) return null;
+
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return null;
+
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      return trimmed;
+    }
+
+    final origin = AppConfig.baseUrl.replaceFirst('/api', '');
+    if (trimmed.startsWith('/')) {
+      return '$origin$trimmed';
+    }
+
+    return '$origin/$trimmed';
+  }
+
   @override
   Widget build(BuildContext context) {
     final catalog = context.watch<CatalogProvider>();
@@ -35,6 +54,11 @@ class _CatalogScreenState extends State<CatalogScreen> {
         : 'Store';
 
     final selectedName = catalog.selectedCategory?.name ?? 'All';
+    final productCount = catalog.filteredProducts.length;
+    final storeSubtitle = '${catalog.allProducts.length} products';
+
+    final bannerUrl = _normalizeUrl(tenantProvider.tenant?.bannerUrl);
+    final logoUrl = _normalizeUrl(tenantProvider.tenant?.logoUrl);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
@@ -43,25 +67,18 @@ class _CatalogScreenState extends State<CatalogScreen> {
         elevation: 0,
         scrolledUnderElevation: 0,
         titleSpacing: 16,
-        toolbarHeight: 60,
+        toolbarHeight: 58,
         title: const Text(
           'Teesams Market',
           style: TextStyle(
-            fontSize: 20,
+            fontSize: 19,
             fontWeight: FontWeight.w800,
             color: Color(0xFF111827),
           ),
         ),
         actions: [
-          IconButton(
-            onPressed: () => Navigator.pushNamed(context, '/cart'),
-            icon: const Icon(
-              Icons.shopping_bag_outlined,
-              color: Color(0xFF111827),
-              size: 25,
-            ),
-          ),
-          const SizedBox(width: 6),
+          CartIconButton(onTap: () => Navigator.pushNamed(context, '/cart')),
+          const SizedBox(width: 4),
         ],
       ),
       body: SafeArea(
@@ -80,16 +97,25 @@ class _CatalogScreenState extends State<CatalogScreen> {
             : CustomScrollView(
                 slivers: [
                   SliverToBoxAdapter(
-                    child: StoreHeader(
-                      name: storeName,
-                      onSwitchStore: _openStoreSelector,
+                    child: Column(
+                      children: [
+                        _StoreBanner(
+                          bannerUrl: bannerUrl,
+                          storeName: storeName,
+                        ),
+                        StoreHeader(
+                          name: storeName,
+                          subtitle: storeSubtitle,
+                          logoUrl: logoUrl,
+                          onSwitchStore: _openStoreSelector,
+                        ),
+                      ],
                     ),
                   ),
-
                   SliverPersistentHeader(
                     pinned: true,
                     delegate: _StickyHeaderDelegate(
-                      height: 68,
+                      height: 66,
                       child: _StickyContainer(
                         child: Padding(
                           padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
@@ -109,16 +135,15 @@ class _CatalogScreenState extends State<CatalogScreen> {
                       ),
                     ),
                   ),
-
                   SliverPersistentHeader(
                     pinned: true,
                     delegate: _StickyHeaderDelegate(
-                      height: 54,
+                      height: 50,
                       child: _StickyContainer(
                         child: Align(
                           alignment: Alignment.centerLeft,
                           child: SizedBox(
-                            height: 34,
+                            height: 32,
                             child: ListView(
                               scrollDirection: Axis.horizontal,
                               padding: const EdgeInsets.symmetric(
@@ -152,7 +177,6 @@ class _CatalogScreenState extends State<CatalogScreen> {
                       ),
                     ),
                   ),
-
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
@@ -162,16 +186,16 @@ class _CatalogScreenState extends State<CatalogScreen> {
                             child: Text(
                               '$selectedName products',
                               style: const TextStyle(
-                                fontSize: 15,
+                                fontSize: 14,
                                 fontWeight: FontWeight.w800,
                                 color: Color(0xFF111827),
                               ),
                             ),
                           ),
                           Text(
-                            '${catalog.filteredProducts.length}',
+                            '$productCount',
                             style: const TextStyle(
-                              fontSize: 14,
+                              fontSize: 13,
                               fontWeight: FontWeight.w700,
                               color: Color(0xFF6B7280),
                             ),
@@ -180,7 +204,6 @@ class _CatalogScreenState extends State<CatalogScreen> {
                       ),
                     ),
                   ),
-
                   if (catalog.filteredProducts.isEmpty)
                     const SliverToBoxAdapter(
                       child: Padding(
@@ -195,6 +218,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
                     SliverList(
                       delegate: SliverChildBuilderDelegate((context, index) {
                         final product = catalog.filteredProducts[index];
+                        final productImageUrl = _normalizeUrl(product.imageUrl);
 
                         final subtitle = product.hasVariants
                             ? 'Browse options'
@@ -234,7 +258,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
                               ),
                               child: Row(
                                 children: [
-                                  const _ProductThumb(),
+                                  _ProductThumb(imageUrl: productImageUrl),
                                   const SizedBox(width: 10),
                                   Expanded(
                                     child: Column(
@@ -292,10 +316,99 @@ class _CatalogScreenState extends State<CatalogScreen> {
                         );
                       }, childCount: catalog.filteredProducts.length),
                     ),
-
                   const SliverToBoxAdapter(child: SizedBox(height: 16)),
                 ],
               ),
+      ),
+    );
+  }
+}
+
+class _StoreBanner extends StatelessWidget {
+  final String? bannerUrl;
+  final String storeName;
+
+  const _StoreBanner({required this.bannerUrl, required this.storeName});
+
+  @override
+  Widget build(BuildContext context) {
+    final hasBanner = bannerUrl != null && bannerUrl!.trim().isNotEmpty;
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+      height: 132,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+        color: const Color(0xFFEFF6FF),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (hasBanner)
+            Image.network(
+              bannerUrl!,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => _fallbackBanner(),
+              loadingBuilder: (context, child, progress) {
+                if (progress == null) return child;
+                return _fallbackBanner();
+              },
+            )
+          else
+            _fallbackBanner(),
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.bottomCenter,
+                end: Alignment.topCenter,
+                colors: [Color(0x66000000), Color(0x14000000)],
+              ),
+            ),
+          ),
+          Positioned(
+            left: 14,
+            right: 14,
+            bottom: 12,
+            child: Text(
+              storeName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                shadows: [
+                  Shadow(
+                    blurRadius: 8,
+                    color: Color(0x66000000),
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _fallbackBanner() {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFDCEBFF), Color(0xFFEFF6FF)],
+        ),
+      ),
+      child: const Center(
+        child: Icon(
+          Icons.storefront_outlined,
+          size: 38,
+          color: Color(0xFF325A88),
+        ),
       ),
     );
   }
@@ -326,26 +439,26 @@ class _SearchBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 46,
+      height: 44,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFD1D5DB), width: 1.1),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFD1D5DB), width: 1.0),
       ),
       child: TextField(
         controller: controller,
         onChanged: onChanged,
-        style: const TextStyle(fontSize: 16),
+        style: const TextStyle(fontSize: 15),
         decoration: InputDecoration(
           border: InputBorder.none,
           prefixIcon: const Icon(
             Icons.search,
-            size: 24,
+            size: 22,
             color: Color(0xFF4B5563),
           ),
           hintText: 'Search products...',
-          hintStyle: const TextStyle(fontSize: 16, color: Color(0xFF6B7280)),
-          contentPadding: const EdgeInsets.symmetric(vertical: 11),
+          hintStyle: const TextStyle(fontSize: 15, color: Color(0xFF6B7280)),
+          contentPadding: const EdgeInsets.symmetric(vertical: 10),
           suffixIcon: controller.text.isEmpty
               ? null
               : IconButton(
@@ -380,7 +493,7 @@ class _CategoryChip extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 3),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
         decoration: BoxDecoration(
           color: isSelected ? const Color(0xFFE8F1FF) : const Color(0xFFF1F5F9),
           borderRadius: BorderRadius.circular(999),
@@ -388,14 +501,14 @@ class _CategoryChip extends StatelessWidget {
             color: isSelected
                 ? const Color(0xFF3B82F6)
                 : const Color(0xFFE5E7EB),
-            width: 1.2,
+            width: 1.1,
           ),
         ),
         child: Center(
           child: Text(
             label,
             style: TextStyle(
-              fontSize: 14,
+              fontSize: 13,
               fontWeight: FontWeight.w700,
               color: isSelected
                   ? const Color(0xFF1D4ED8)
@@ -409,13 +522,36 @@ class _CategoryChip extends StatelessWidget {
 }
 
 class _ProductThumb extends StatelessWidget {
-  const _ProductThumb();
+  final String? imageUrl;
+
+  const _ProductThumb({this.imageUrl});
 
   @override
   Widget build(BuildContext context) {
+    if (imageUrl != null && imageUrl!.trim().isNotEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Image.network(
+          imageUrl!,
+          width: 50,
+          height: 50,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _placeholder(),
+          loadingBuilder: (context, child, progress) {
+            if (progress == null) return child;
+            return _placeholder();
+          },
+        ),
+      );
+    }
+
+    return _placeholder();
+  }
+
+  Widget _placeholder() {
     return Container(
-      width: 52,
-      height: 52,
+      width: 50,
+      height: 50,
       decoration: BoxDecoration(
         color: const Color(0xFFF3F4F6),
         borderRadius: BorderRadius.circular(12),
@@ -424,7 +560,7 @@ class _ProductThumb extends StatelessWidget {
       child: const Icon(
         Icons.fastfood_outlined,
         color: Color(0xFF6B7280),
-        size: 24,
+        size: 22,
       ),
     );
   }

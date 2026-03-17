@@ -50,6 +50,25 @@ class Variant {
     );
   }
 
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'sku': sku,
+      'name': name,
+      'unit_type': unitType,
+      'unit_qty': unitQty,
+      'price': price,
+      'sale_price': salePrice,
+      'price_used': priceUsed,
+      'has_discount': hasDiscount,
+      'is_available': isAvailable,
+      'track_inventory': trackInventory,
+      'stock_qty': stockQty,
+      'allow_backorder': allowBackorder,
+      'in_stock': inStock,
+    };
+  }
+
   static int? _toInt(dynamic value) {
     if (value == null) return null;
     if (value is int) return value;
