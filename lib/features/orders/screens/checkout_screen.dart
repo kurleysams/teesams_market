@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/api/api_client.dart';
 import '../../../core/config/app_config.dart';
+import '../../cart/data/checkout_api.dart';
+import '../../cart/data/stripe_checkout_service.dart';
 import '../../cart/models/cart_item.dart';
+import '../../cart/models/checkout_payment_models.dart';
 import '../../cart/state/cart_provider.dart';
-import '../../orders/state/order_provider.dart';
 import '../../tenant/state/tenant_provider.dart';
+import '../../cart/screens/order_pending_page.dart';
 
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key});
@@ -21,7 +26,20 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   final _addressCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
 
+  late CheckoutApi _api;
+  late StripeCheckoutService _checkoutService;
+
   bool _submitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Temporary default instance; real tenant-scoped instance is rebuilt in _submit()
+    final apiClient = ApiClient(tenantSlug: 'fishseafoods');
+    _api = CheckoutApi(apiClient.dio);
+    _checkoutService = StripeCheckoutService(_api);
+  }
 
   @override
   void dispose() {
@@ -51,7 +69,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   Future<void> _submit() async {
     final cart = context.read<CartProvider>();
     final tenantProvider = context.read<TenantProvider>();
-    final orderProvider = context.read<OrderProvider>();
 
     if (cart.items.isEmpty) {
       ScaffoldMessenger.of(
@@ -75,28 +92,44 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     });
 
     try {
-      final orderNumber = await orderProvider.placeOrder(
-        tenantSlug: tenantSlug,
+      // Rebuild API client with the active tenant
+      final apiClient = ApiClient(tenantSlug: tenantSlug);
+      _api = CheckoutApi(apiClient.dio);
+      _checkoutService = StripeCheckoutService(_api);
+
+      final request = CreatePaymentRequest(
         customerName: _nameCtrl.text.trim(),
         customerPhone: _phoneCtrl.text.trim(),
-        deliveryAddress: _addressCtrl.text.trim(),
         fulfilmentType: 'delivery',
+        deliveryAddress: _addressCtrl.text.trim(),
         customerNote: _notesCtrl.text.trim(),
-        items: cart.items,
+        items: cart.items.map((item) {
+          return CheckoutPaymentItem(variantId: item.variant.id, qty: item.qty);
+        }).toList(),
       );
 
-      await cart.clear();
+      final result = await _checkoutService.pay(request: request);
 
       if (!mounted) return;
 
-      Navigator.pushReplacementNamed(
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => OrderPendingPage(
+            orderId: result.orderId,
+            orderNumber: result.orderNumber,
+            api: _api,
+          ),
+        ),
+      );
+    } on StripeException catch (e) {
+      if (!mounted) return;
+      final message = e.error.localizedMessage ?? 'Payment was cancelled.';
+      ScaffoldMessenger.of(
         context,
-        '/order-success',
-        arguments: orderNumber,
-      );
-    } catch (_) {
+      ).showSnackBar(SnackBar(content: Text(message)));
+    } catch (e) {
       if (!mounted) return;
-      final message = orderProvider.error ?? 'Unable to place order';
+      final message = e.toString().replaceFirst('Exception: ', '');
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(message)));
@@ -298,7 +331,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                       ),
                                     )
                                   : const Text(
-                                      'Place order',
+                                      'Pay now',
                                       style: TextStyle(
                                         fontSize: 15,
                                         fontWeight: FontWeight.w800,

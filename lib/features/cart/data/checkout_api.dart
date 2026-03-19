@@ -12,41 +12,35 @@ class CheckoutApi {
   Future<CreatePaymentResponse> createPaymentIntent(
     CreatePaymentRequest request,
   ) async {
-    final response = await dio.post(
-      Endpoints.createPayment,
-      data: request.toJson(),
-    );
-
-    debugPrint('REAL URL: ${response.realUri}');
-    debugPrint('STATUS: ${response.statusCode}');
-    debugPrint('RESPONSE DATA: ${response.data}');
-
-    if (response.data is String &&
-        (response.data as String).contains('<!DOCTYPE html>')) {
-      throw Exception(
-        'API returned HTML instead of JSON. Check baseUrl/API routing.',
+    try {
+      final response = await dio.post(
+        Endpoints.createPayment,
+        data: request.toJson(),
       );
-    }
 
-    return CreatePaymentResponse.fromJson(
-      Map<String, dynamic>.from(response.data as Map),
-    );
+      debugPrint('PAYMENT URL: ${response.realUri}');
+      debugPrint('PAYMENT STATUS: ${response.statusCode}');
+      debugPrint('PAYMENT RESPONSE: ${response.data}');
+
+      return CreatePaymentResponse.fromJson(
+        Map<String, dynamic>.from(response.data as Map),
+      );
+    } on DioException catch (e) {
+      debugPrint('PAYMENT ERROR STATUS: ${e.response?.statusCode}');
+      debugPrint('PAYMENT ERROR DATA: ${e.response?.data}');
+
+      final data = e.response?.data;
+
+      if (data is Map && data['message'] != null) {
+        throw Exception(data['message'].toString());
+      }
+
+      throw Exception(e.message ?? 'Unable to create payment intent.');
+    }
   }
 
   Future<Map<String, dynamic>> fetchOrder(int orderId) async {
-    final response = await dio.get('v1/orders/$orderId');
-
-    debugPrint('ORDER URL: ${response.realUri}');
-    debugPrint('ORDER STATUS: ${response.statusCode}');
-    debugPrint('ORDER RESPONSE DATA: ${response.data}');
-
-    if (response.data is String &&
-        (response.data as String).contains('<!DOCTYPE html>')) {
-      throw Exception(
-        'API returned HTML instead of JSON when fetching order. Check baseUrl/API routing.',
-      );
-    }
-
+    final response = await dio.get(Endpoints.order(orderId));
     return Map<String, dynamic>.from(response.data as Map);
   }
 }

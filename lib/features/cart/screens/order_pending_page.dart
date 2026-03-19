@@ -1,19 +1,18 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+
 import '../data/checkout_api.dart';
 
 class OrderPendingPage extends StatefulWidget {
   final int orderId;
   final String orderNumber;
   final CheckoutApi api;
-  final String tenantSlugOrHeaderValue;
 
   const OrderPendingPage({
     super.key,
     required this.orderId,
     required this.orderNumber,
     required this.api,
-    required this.tenantSlugOrHeaderValue,
   });
 
   @override
@@ -36,12 +35,11 @@ class _OrderPendingPageState extends State<OrderPendingPage> {
 
   Future<void> _load() async {
     try {
-      final json = await widget.api.fetchOrder(
-        widget.orderId,
-        // tenantSlugOrHeaderValue: widget.tenantSlugOrHeaderValue,
-      );
+      final json = await widget.api.fetchOrder(widget.orderId);
 
-      final order = Map<String, dynamic>.from((json['data'] ?? json) as Map);
+      final order = Map<String, dynamic>.from(
+        (json['order'] ?? json['data'] ?? json) as Map,
+      );
 
       final paymentStatus = (order['payment_status'] ?? 'pending').toString();
       final orderStatus = (order['status'] ?? 'pending').toString();
@@ -104,15 +102,20 @@ class _OrderPendingPageState extends State<OrderPendingPage> {
               Text(
                 'Order ${widget.orderNumber}',
                 style: Theme.of(context).textTheme.titleLarge,
+                textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
-              Text(message),
+              Text(message, textAlign: TextAlign.center),
               const SizedBox(height: 8),
               Text('Order status: $_orderStatus'),
               Text('Payment status: $_paymentStatus'),
               if (_error != null) ...[
                 const SizedBox(height: 12),
-                Text(_error!, style: const TextStyle(color: Colors.red)),
+                Text(
+                  _error!,
+                  style: const TextStyle(color: Colors.red),
+                  textAlign: TextAlign.center,
+                ),
               ],
             ],
           ),
@@ -131,7 +134,15 @@ class PaymentSuccessPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Success')),
-      body: Center(child: Text('Payment confirmed for order $orderNumber')),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            'Payment confirmed for order $orderNumber',
+            textAlign: TextAlign.center,
+          ),
+        ),
+      ),
     );
   }
 }

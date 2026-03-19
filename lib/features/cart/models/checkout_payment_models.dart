@@ -1,70 +1,44 @@
-class CheckoutCustomer {
-  final String name;
-  final String? email;
-  final String? phone;
-
-  const CheckoutCustomer({required this.name, this.email, this.phone});
-
-  Map<String, dynamic> toJson() => {
-    'name': name,
-    'email': email,
-    'phone': phone,
-  };
-}
-
-class CheckoutItem {
-  final int productId;
-  final int quantity;
-
-  const CheckoutItem({required this.productId, required this.quantity});
-
-  Map<String, dynamic> toJson() => {
-    'product_id': productId,
-    'quantity': quantity,
-  };
-}
-
-class CheckoutAddress {
-  final String? line1;
-  final String? line2;
-  final String? city;
-  final String? postcode;
-
-  const CheckoutAddress({this.line1, this.line2, this.city, this.postcode});
-
-  Map<String, dynamic> toJson() => {
-    'line1': line1,
-    'line2': line2,
-    'city': city,
-    'postcode': postcode,
-  };
-}
-
 class CreatePaymentRequest {
-  final CheckoutCustomer customer;
-  final List<CheckoutItem> items;
-  final String deliveryMethod; // delivery | pickup
-  final int? deliveryZoneId;
-  final CheckoutAddress? address;
-  final String? notes;
+  final String customerName;
+  final String customerPhone;
+  final String? customerEmail;
+  final String fulfilmentType;
+  final String deliveryAddress;
+  final String? customerNote;
+  final List<CheckoutPaymentItem> items;
 
   const CreatePaymentRequest({
-    required this.customer,
+    required this.customerName,
+    required this.customerPhone,
+    this.customerEmail,
+    required this.fulfilmentType,
+    required this.deliveryAddress,
+    this.customerNote,
     required this.items,
-    required this.deliveryMethod,
-    this.deliveryZoneId,
-    this.address,
-    this.notes,
   });
 
   Map<String, dynamic> toJson() => {
-    'customer': customer.toJson(),
+    'customer_name': customerName,
+    'customer_phone': customerPhone,
+    'customer_email': customerEmail?.trim().isEmpty == true
+        ? null
+        : customerEmail?.trim(),
+    'fulfilment_type': fulfilmentType,
+    'delivery_address': deliveryAddress,
+    'customer_note': customerNote?.trim().isEmpty == true
+        ? null
+        : customerNote?.trim(),
     'items': items.map((e) => e.toJson()).toList(),
-    'delivery_method': deliveryMethod,
-    'delivery_zone_id': deliveryZoneId,
-    'address': address?.toJson(),
-    'notes': notes,
   };
+}
+
+class CheckoutPaymentItem {
+  final int variantId;
+  final int qty;
+
+  const CheckoutPaymentItem({required this.variantId, required this.qty});
+
+  Map<String, dynamic> toJson() => {'variant_id': variantId, 'qty': qty};
 }
 
 class CreatePaymentResponse {
