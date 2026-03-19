@@ -9,11 +9,6 @@
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
 
-        <!-- Stripe publishable key -->
-        <meta-data
-            android:name="com.stripe.android.publishableKey"
-            android:value="pk_test_your_key_here"/>
-
         <!-- Stripe redirect scheme -->
         <meta-data
             android:name="com.stripe.android.redirectScheme"
@@ -40,7 +35,7 @@
             </intent-filter>
 
             <!-- Stripe redirect handling -->
-            <intent-filter>
+            <intent-filter android:label="stripe_redirect">
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>

@@ -1,27 +1,26 @@
 import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 
-import '../../../core/config/app_config.dart';
+import '../../../core/api/api_client.dart';
+import '../../../core/api/endpoints.dart';
 import '../models/category.dart' as catalog_model;
 
 class CatalogApi {
-  CatalogApi({Dio? dio}) : _dio = dio ?? Dio();
+  CatalogApi({Dio? dio}) : _dio = dio;
 
-  final Dio _dio;
+  final Dio? _dio;
 
   Future<List<catalog_model.Category>> fetchCategories({
     required String tenantSlug,
   }) async {
-    final url = '${AppConfig.baseUrl}/v1/catalog';
+    final dio = _dio ?? ApiClient(tenantSlug: tenantSlug).dio;
+    final requestUrl = '${dio.options.baseUrl}${Endpoints.catalog}';
 
     debugPrint('--- fetchCatalog/categories ---');
-    debugPrint('REQUEST URL: $url');
+    debugPrint('REQUEST URL: $requestUrl');
     debugPrint('TENANT HEADER: $tenantSlug');
 
-    final response = await _dio.get(
-      url,
-      options: Options(headers: {'X-Tenant': tenantSlug}),
-    );
+    final response = await dio.get(Endpoints.catalog);
 
     debugPrint('STATUS CODE: ${response.statusCode}');
     debugPrint('RAW RESPONSE: ${response.data}');

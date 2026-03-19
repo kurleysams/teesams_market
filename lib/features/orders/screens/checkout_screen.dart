@@ -16,7 +16,6 @@ class CheckoutScreen extends StatefulWidget {
 
 class _CheckoutScreenState extends State<CheckoutScreen> {
   final _formKey = GlobalKey<FormState>();
-
   final _nameCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
   final _addressCtrl = TextEditingController();
@@ -35,7 +34,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   String? _normalizeUrl(String? value) {
     if (value == null) return null;
-
     final trimmed = value.trim();
     if (trimmed.isEmpty) return null;
 
@@ -43,11 +41,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       return trimmed;
     }
 
-    final origin = AppConfig.baseUrl.replaceFirst('/api', '');
+    final origin = AppConfig.baseUrl.replaceFirst('/api/', '/');
     if (trimmed.startsWith('/')) {
       return '$origin$trimmed';
     }
-
     return '$origin/$trimmed';
   }
 
@@ -83,7 +80,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         customerName: _nameCtrl.text.trim(),
         customerPhone: _phoneCtrl.text.trim(),
         deliveryAddress: _addressCtrl.text.trim(),
-        notes: _notesCtrl.text.trim(),
+        fulfilmentType: 'delivery',
+        customerNote: _notesCtrl.text.trim(),
         items: cart.items,
       );
 
@@ -98,7 +96,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       );
     } catch (_) {
       if (!mounted) return;
-
       final message = orderProvider.error ?? 'Unable to place order';
       ScaffoldMessenger.of(
         context,

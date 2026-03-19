@@ -23,7 +23,7 @@ dependencies:
   dio: ^5.7.0
 
   # Payments
-  flutter_stripe: ^11.0.0
+  flutter_stripe: ^12.0.1
 
   # Media & utilities
   image_picker: ^1.1.2
@@ -32,7 +32,7 @@ dependencies:
 
   # UI
   cupertino_icons: ^1.0.8
-  font_awesome_flutter: ^10.12.0
+  font_awesome_flutter: ^11.0.0
 
 dev_dependencies:
   flutter_test:

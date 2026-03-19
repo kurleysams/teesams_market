@@ -76,6 +76,21 @@
 		<key>UIStatusBarHidden</key>
 		<false/>
 
+		<!-- Stripe redirect URL scheme -->
+		<key>CFBundleURLTypes</key>
+		<array>
+			<dict>
+				<key>CFBundleTypeRole</key>
+				<string>Editor</string>
+				<key>CFBundleURLName</key>
+				<string>com.teesams.teesams_market.stripe</string>
+				<key>CFBundleURLSchemes</key>
+				<array>
+					<string>teesamsmarket</string>
+				</array>
+			</dict>
+		</array>
+
 		<!-- Stripe / Payment permissions -->
 
 		<key>NSCameraUsageDescription</key>

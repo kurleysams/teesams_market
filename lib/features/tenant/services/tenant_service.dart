@@ -50,15 +50,14 @@ class TenantService {
   }) async {
     final api = ApiClient(tenantSlug: tenantSlug, authToken: authToken);
 
-    const endpoint = '/v1/tenants';
-    final requestUrl = '${api.dio.options.baseUrl}$endpoint';
+    final requestUrl = '${api.dio.options.baseUrl}${Endpoints.tenants}';
 
     debugPrint('--- fetchTenants ---');
     debugPrint('REQUEST URL: $requestUrl');
     debugPrint('TENANT HEADER: $tenantSlug');
     debugPrint('AUTH TOKEN SET: ${authToken != null && authToken.isNotEmpty}');
 
-    final response = await api.dio.get(endpoint);
+    final response = await api.dio.get(Endpoints.tenants);
 
     debugPrint('STATUS CODE: ${response.statusCode}');
     debugPrint('RAW RESPONSE: ${response.data}');

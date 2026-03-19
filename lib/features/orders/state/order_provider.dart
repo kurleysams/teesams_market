@@ -1,7 +1,8 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
-import '../../../core/config/app_config.dart';
+import '../../../core/api/api_client.dart';
+import '../../../core/api/endpoints.dart';
 import '../../cart/models/cart_item.dart';
 
 class OrderProvider extends ChangeNotifier {
@@ -16,7 +17,9 @@ class OrderProvider extends ChangeNotifier {
     required String customerName,
     required String customerPhone,
     required String deliveryAddress,
-    String? notes,
+    required String fulfilmentType,
+    String? customerEmail,
+    String? customerNote,
     required List<CartItem> items,
   }) async {
     _submitting = true;
@@ -24,25 +27,24 @@ class OrderProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final dio = Dio();
+      final api = ApiClient(tenantSlug: tenantSlug);
 
-      final response = await dio.post(
-        '${AppConfig.baseUrl}/v1/orders',
-        options: Options(headers: {'X-Tenant': tenantSlug}),
+      final response = await api.dio.post(
+        Endpoints.createOrder,
         data: {
           'customer_name': customerName,
           'customer_phone': customerPhone,
+          'customer_email': customerEmail?.trim().isEmpty == true
+              ? null
+              : customerEmail?.trim(),
+          'fulfilment_type': fulfilmentType,
           'delivery_address': deliveryAddress,
-          'notes': notes?.trim().isEmpty == true ? null : notes?.trim(),
-          'items': items
-              .map(
-                (item) => {
-                  'product_id': item.product.id,
-                  'variant_id': item.variant.id > 0 ? item.variant.id : null,
-                  'qty': item.qty,
-                },
-              )
-              .toList(),
+          'customer_note': customerNote?.trim().isEmpty == true
+              ? null
+              : customerNote?.trim(),
+          'items': items.map((item) {
+            return {'variant_id': item.variant.id, 'qty': item.qty};
+          }).toList(),
         },
       );
 
@@ -72,11 +74,17 @@ class OrderProvider extends ChangeNotifier {
 
       return orderNumber;
     } on DioException catch (e) {
-      _error =
-          e.response?.data?.toString() ?? e.message ?? 'Unable to place order';
+      final data = e.response?.data;
+
+      if (data is Map && data['message'] != null) {
+        _error = data['message'].toString();
+      } else {
+        _error = e.message ?? 'Unable to place order';
+      }
+
       throw Exception(_error);
     } catch (e) {
-      _error = e.toString();
+      _error = e.toString().replaceFirst('Exception: ', '');
       throw Exception(_error);
     } finally {
       _submitting = false;
