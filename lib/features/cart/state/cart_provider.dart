@@ -1,3 +1,5 @@
+// lib/features/cart/state/cart_provider.dart
+
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';

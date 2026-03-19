@@ -1,3 +1,6 @@
+// lib/features/orders/screens/checkout_screen.dart
+// lib/features/orders/screens/checkout_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:provider/provider.dart';
@@ -8,9 +11,9 @@ import '../../cart/data/checkout_api.dart';
 import '../../cart/data/stripe_checkout_service.dart';
 import '../../cart/models/cart_item.dart';
 import '../../cart/models/checkout_payment_models.dart';
+import '../../cart/screens/order_pending_page.dart';
 import '../../cart/state/cart_provider.dart';
 import '../../tenant/state/tenant_provider.dart';
-import '../../cart/screens/order_pending_page.dart';
 
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key});
@@ -35,7 +38,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   void initState() {
     super.initState();
 
-    // Temporary default instance; real tenant-scoped instance is rebuilt in _submit()
     final apiClient = ApiClient(tenantSlug: 'fishseafoods');
     _api = CheckoutApi(apiClient.dio);
     _checkoutService = StripeCheckoutService(_api);
@@ -92,7 +94,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     });
 
     try {
-      // Rebuild API client with the active tenant
       final apiClient = ApiClient(tenantSlug: tenantSlug);
       _api = CheckoutApi(apiClient.dio);
       _checkoutService = StripeCheckoutService(_api);
@@ -123,13 +124,20 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       );
     } on StripeException catch (e) {
       if (!mounted) return;
-      final message = e.error.localizedMessage ?? 'Payment was cancelled.';
+
+      final message = e.error.code == FailureCode.Canceled
+          ? 'Payment cancelled. Your details are still here.'
+          : (e.error.localizedMessage ?? 'Unable to complete payment.');
+
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(message)));
     } catch (e) {
       if (!mounted) return;
-      final message = e.toString().replaceFirst('Exception: ', '');
+
+      final raw = e.toString().replaceFirst('Exception: ', '');
+      final message = raw.isEmpty ? 'Unable to start payment.' : raw;
+
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(message)));
