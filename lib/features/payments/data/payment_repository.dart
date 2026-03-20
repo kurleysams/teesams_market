@@ -6,11 +6,13 @@ class PaymentRepository {
     required String tenantSlug,
     required int orderId,
   }) async {
-    final client = ApiClient(tenantSlug: tenantSlug);
+    final client = await ApiClient.create(tenantSlug: tenantSlug);
+
     final response = await client.dio.post(
       Endpoints.createPayment,
       data: {'order_id': orderId},
     );
+
     return Map<String, dynamic>.from(response.data as Map);
   }
 }

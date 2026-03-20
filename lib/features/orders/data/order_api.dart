@@ -6,11 +6,13 @@ class OrderApi {
     required String tenantSlug,
     required Map<String, dynamic> payload,
   }) async {
-    final client = ApiClient(tenantSlug: tenantSlug);
+    final client = await ApiClient.create(tenantSlug: tenantSlug);
+
     final response = await client.dio.post(
       Endpoints.createOrder,
       data: payload,
     );
+
     return Map<String, dynamic>.from(response.data as Map);
   }
 }

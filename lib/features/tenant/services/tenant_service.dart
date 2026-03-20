@@ -11,7 +11,7 @@ class TenantService {
     required String tenantSlug,
     String? authToken,
   }) async {
-    final api = ApiClient(tenantSlug: tenantSlug, authToken: authToken);
+    final api = await ApiClient.create(tenantSlug: tenantSlug);
 
     final requestUrl = '${api.dio.options.baseUrl}${Endpoints.tenant}';
 
@@ -48,7 +48,7 @@ class TenantService {
     required String tenantSlug,
     String? authToken,
   }) async {
-    final api = ApiClient(tenantSlug: tenantSlug, authToken: authToken);
+    final api = await ApiClient.create(tenantSlug: tenantSlug);
 
     final requestUrl = '${api.dio.options.baseUrl}${Endpoints.tenants}';
 

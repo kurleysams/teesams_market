@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../auth/screens/login_screen.dart';
+import '../../auth/state/auth_provider.dart';
+import '../../tenant/state/tenant_provider.dart';
 import '../models/customer_order_summary.dart';
 import '../state/order_provider.dart';
 import 'order_details_screen.dart';
@@ -15,44 +18,107 @@ class MyOrdersScreen extends StatefulWidget {
 }
 
 class _MyOrdersScreenState extends State<MyOrdersScreen> {
-  late Future<List<CustomerOrderSummary>> _future;
+  Future<List<CustomerOrderSummary>>? _future;
+
+  String _resolvedTenantSlug(BuildContext context) {
+    if (widget.tenantSlug.trim().isNotEmpty) return widget.tenantSlug.trim();
+    return context.read<TenantProvider>().tenant?.slug ?? '';
+  }
 
   @override
   void initState() {
     super.initState();
-    _future = context.read<OrderProvider>().fetchMyOrders(
-      tenantSlug: widget.tenantSlug,
-    );
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      final auth = context.read<AuthProvider>();
+
+      if (!auth.isAuthenticated) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const LoginScreen()),
+        );
+        return;
+      }
+
+      final tenantSlug = _resolvedTenantSlug(context);
+      if (tenantSlug.isEmpty) return;
+
+      setState(() {
+        _future = context.read<OrderProvider>().fetchMyOrders(
+          tenantSlug: tenantSlug,
+        );
+      });
+    });
   }
 
   Future<void> _reload() async {
+    final auth = context.read<AuthProvider>();
+
+    if (!auth.isAuthenticated) {
+      Navigator.of(
+        context,
+      ).pushReplacement(MaterialPageRoute(builder: (_) => const LoginScreen()));
+      return;
+    }
+
+    final tenantSlug = _resolvedTenantSlug(context);
+    if (tenantSlug.isEmpty) return;
+
+    final future = context.read<OrderProvider>().fetchMyOrders(
+      tenantSlug: tenantSlug,
+    );
+
     setState(() {
-      _future = context.read<OrderProvider>().fetchMyOrders(
-        tenantSlug: widget.tenantSlug,
-      );
+      _future = future;
     });
-    await _future;
+
+    await future;
   }
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+    final future = _future;
+
+    if (!auth.isAuthenticated) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    if (future == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('My Orders')),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(title: const Text('My Orders')),
       body: FutureBuilder<List<CustomerOrderSummary>>(
-        future: _future,
+        future: future,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return const _OrdersLoadingState();
           }
 
           if (snapshot.hasError) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(
-                  snapshot.error.toString().replaceFirst('Exception: ', ''),
-                  textAlign: TextAlign.center,
-                ),
+            return RefreshIndicator(
+              onRefresh: _reload,
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(24),
+                children: [
+                  const SizedBox(height: 120),
+                  _OrdersMessageCard(
+                    icon: Icons.error_outline,
+                    title: 'Unable to load orders',
+                    message: snapshot.error.toString().replaceFirst(
+                      'Exception: ',
+                      '',
+                    ),
+                  ),
+                ],
               ),
             );
           }
@@ -63,9 +129,15 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
             return RefreshIndicator(
               onRefresh: _reload,
               child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(24),
                 children: const [
-                  SizedBox(height: 140),
-                  Center(child: Text('No orders found')),
+                  SizedBox(height: 120),
+                  _OrdersMessageCard(
+                    icon: Icons.receipt_long_outlined,
+                    title: 'No orders yet',
+                    message: 'When you place an order, it will appear here.',
+                  ),
                 ],
               ),
             );
@@ -74,32 +146,23 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
           return RefreshIndicator(
             onRefresh: _reload,
             child: ListView.builder(
-              padding: const EdgeInsets.all(16),
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
               itemCount: orders.length,
               itemBuilder: (context, index) {
                 final order = orders[index];
+                final tenantSlug = _resolvedTenantSlug(context);
 
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.all(16),
-                    title: Text('Order #${order.orderNumber}'),
-                    subtitle: Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: Text(
-                        '${_statusLabel(order.status)}'
-                        '${order.placedAt != null ? ' • ${order.placedAt}' : ''}',
-                      ),
-                    ),
-                    trailing: order.total != null
-                        ? Text(order.total!.toStringAsFixed(2))
-                        : null,
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _OrderCard(
+                    order: order,
                     onTap: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
                           builder: (_) => OrderDetailsScreen(
-                            tenantSlug: widget.tenantSlug,
+                            tenantSlug: tenantSlug,
                             orderId: order.id,
                           ),
                         ),
@@ -114,13 +177,276 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
       ),
     );
   }
+}
 
-  String _statusLabel(String value) {
-    return value
-        .replaceAll('_', ' ')
-        .split(' ')
-        .where((e) => e.trim().isNotEmpty)
-        .map((word) => word[0].toUpperCase() + word.substring(1).toLowerCase())
-        .join(' ');
+class _OrderCard extends StatelessWidget {
+  final CustomerOrderSummary order;
+  final VoidCallback onTap;
+
+  const _OrderCard({required this.order, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final status = _statusLabel(order.status);
+    final paymentStatus = order.paymentStatus == null
+        ? null
+        : _statusLabel(order.paymentStatus!);
+
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xFFE5E7EB)),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x08000000),
+                blurRadius: 8,
+                offset: Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Order #${order.orderNumber}',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF111827),
+                      ),
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right, color: Color(0xFF6B7280)),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _StatusBadge(
+                    label: status,
+                    kind: _orderStatusKind(order.status),
+                  ),
+                  if (paymentStatus != null)
+                    _StatusBadge(
+                      label: paymentStatus,
+                      kind: _paymentStatusKind(order.paymentStatus!),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  const Icon(
+                    Icons.schedule_outlined,
+                    size: 18,
+                    color: Color(0xFF6B7280),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      _friendlyDate(order.placedAt),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: Color(0xFF6B7280),
+                      ),
+                    ),
+                  ),
+                  if (order.total != null)
+                    Text(
+                      order.total!.toStringAsFixed(2),
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF111827),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusBadge extends StatelessWidget {
+  final String label;
+  final _BadgeKind kind;
+
+  const _StatusBadge({required this.label, required this.kind});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = switch (kind) {
+      _BadgeKind.success => (
+        bg: const Color(0xFFEAF7EE),
+        border: const Color(0xFFB7E4C7),
+        text: const Color(0xFF166534),
+      ),
+      _BadgeKind.warning => (
+        bg: const Color(0xFFFFF7E6),
+        border: const Color(0xFFF7D9A8),
+        text: const Color(0xFF92400E),
+      ),
+      _BadgeKind.info => (
+        bg: const Color(0xFFEFF6FF),
+        border: const Color(0xFFBFDBFE),
+        text: const Color(0xFF1D4ED8),
+      ),
+      _BadgeKind.neutral => (
+        bg: const Color(0xFFF3F4F6),
+        border: const Color(0xFFE5E7EB),
+        text: const Color(0xFF374151),
+      ),
+      _BadgeKind.danger => (
+        bg: const Color(0xFFFEECEC),
+        border: const Color(0xFFF5B5B5),
+        text: const Color(0xFFB91C1C),
+      ),
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: colors.bg,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: colors.border),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          color: colors.text,
+        ),
+      ),
+    );
+  }
+}
+
+class _OrdersMessageCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String message;
+
+  const _OrdersMessageCard({
+    required this.icon,
+    required this.title,
+    required this.message,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, size: 40, color: const Color(0xFF6B7280)),
+          const SizedBox(height: 12),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF111827),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 14, color: Color(0xFF6B7280)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OrdersLoadingState extends StatelessWidget {
+  const _OrdersLoadingState();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(child: CircularProgressIndicator());
+  }
+}
+
+enum _BadgeKind { success, warning, info, neutral, danger }
+
+_BadgeKind _orderStatusKind(String status) {
+  switch (status.toLowerCase()) {
+    case 'delivered':
+    case 'confirmed':
+      return _BadgeKind.success;
+    case 'pending':
+    case 'processing':
+      return _BadgeKind.warning;
+    case 'shipped':
+      return _BadgeKind.info;
+    case 'cancelled':
+    case 'failed':
+      return _BadgeKind.danger;
+    default:
+      return _BadgeKind.neutral;
+  }
+}
+
+_BadgeKind _paymentStatusKind(String status) {
+  switch (status.toLowerCase()) {
+    case 'paid':
+    case 'succeeded':
+      return _BadgeKind.success;
+    case 'pending':
+      return _BadgeKind.warning;
+    case 'failed':
+    case 'cancelled':
+      return _BadgeKind.danger;
+    default:
+      return _BadgeKind.neutral;
+  }
+}
+
+String _statusLabel(String value) {
+  return value
+      .replaceAll('_', ' ')
+      .split(' ')
+      .where((e) => e.trim().isNotEmpty)
+      .map((word) => word[0].toUpperCase() + word.substring(1).toLowerCase())
+      .join(' ');
+}
+
+String _friendlyDate(String? value) {
+  if (value == null || value.trim().isEmpty) return 'Unknown date';
+
+  try {
+    final dt = DateTime.parse(value).toLocal();
+    final day = dt.day.toString().padLeft(2, '0');
+    final month = dt.month.toString().padLeft(2, '0');
+    final year = dt.year.toString();
+    final hour = dt.hour.toString().padLeft(2, '0');
+    final minute = dt.minute.toString().padLeft(2, '0');
+    return '$day/$month/$year • $hour:$minute';
+  } catch (_) {
+    return value;
   }
 }

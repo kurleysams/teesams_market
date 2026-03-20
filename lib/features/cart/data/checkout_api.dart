@@ -38,9 +38,4 @@ class CheckoutApi {
       throw Exception(e.message ?? 'Unable to create payment intent.');
     }
   }
-
-  Future<Map<String, dynamic>> fetchOrder(int orderId) async {
-    final response = await dio.get(Endpoints.order(orderId));
-    return Map<String, dynamic>.from(response.data as Map);
-  }
 }

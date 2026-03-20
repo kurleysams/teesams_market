@@ -7,8 +7,8 @@ class OrderTrackingModel {
   final String? customerName;
   final String? customerPhone;
   final String? customerEmail;
-  final String? deliveryAddress;
   final String? fulfilmentType;
+  final String? deliveryAddress;
   final String? customerNote;
   final String? currency;
   final double? subtotal;
@@ -18,9 +18,9 @@ class OrderTrackingModel {
   final String? paidAt;
   final String? placedAt;
   final List<OrderTrackingItem> items;
-  final List<OrderTrackingHistory> history;
+  final List<OrderTrackingHistoryEntry> history;
 
-  OrderTrackingModel({
+  const OrderTrackingModel({
     this.id,
     required this.orderNumber,
     required this.status,
@@ -29,8 +29,8 @@ class OrderTrackingModel {
     this.customerName,
     this.customerPhone,
     this.customerEmail,
-    this.deliveryAddress,
     this.fulfilmentType,
+    this.deliveryAddress,
     this.customerNote,
     this.currency,
     this.subtotal,
@@ -44,41 +44,66 @@ class OrderTrackingModel {
   });
 
   factory OrderTrackingModel.fromJson(Map<String, dynamic> json) {
-    final root = (json['order'] is Map<String, dynamic>)
-        ? json['order'] as Map<String, dynamic>
-        : json;
+    final root = json['order'] is Map<String, dynamic>
+        ? Map<String, dynamic>.from(json['order'] as Map<String, dynamic>)
+        : Map<String, dynamic>.from(json);
+
+    final rawItems = root['items'] is List
+        ? List<Map<String, dynamic>>.from(
+            (root['items'] as List).map((e) => Map<String, dynamic>.from(e)),
+          )
+        : json['items'] is List
+        ? List<Map<String, dynamic>>.from(
+            (json['items'] as List).map((e) => Map<String, dynamic>.from(e)),
+          )
+        : <Map<String, dynamic>>[];
+
+    final rawHistory = root['history'] is List
+        ? List<Map<String, dynamic>>.from(
+            (root['history'] as List).map((e) => Map<String, dynamic>.from(e)),
+          )
+        : json['history'] is List
+        ? List<Map<String, dynamic>>.from(
+            (json['history'] as List).map((e) => Map<String, dynamic>.from(e)),
+          )
+        : json['events'] is List
+        ? List<Map<String, dynamic>>.from(
+            (json['events'] as List).map((e) => Map<String, dynamic>.from(e)),
+          )
+        : <Map<String, dynamic>>[];
 
     return OrderTrackingModel(
-      id: int.tryParse((root['id'] ?? '').toString()),
-      orderNumber: root['order_number']?.toString() ?? '',
+      id: _asInt(root['id']),
+      orderNumber:
+          root['order_number']?.toString() ?? root['number']?.toString() ?? '',
       status: root['status']?.toString() ?? 'pending',
       paymentStatus: root['payment_status']?.toString(),
       paymentProvider: root['payment_provider']?.toString(),
       customerName: root['customer_name']?.toString(),
       customerPhone: root['customer_phone']?.toString(),
       customerEmail: root['customer_email']?.toString(),
-      deliveryAddress: root['delivery_address']?.toString(),
       fulfilmentType: root['fulfilment_type']?.toString(),
+      deliveryAddress: root['delivery_address']?.toString(),
       customerNote: root['customer_note']?.toString(),
       currency: root['currency']?.toString(),
-      subtotal: _toDouble(root['subtotal']),
-      discountTotal: _toDouble(root['discount_total']),
-      deliveryFee: _toDouble(root['delivery_fee']),
-      totalAmount: _toDouble(root['total_amount'] ?? root['total']),
+      subtotal: _asDouble(root['subtotal']),
+      discountTotal: _asDouble(root['discount_total']),
+      deliveryFee: _asDouble(root['delivery_fee']),
+      totalAmount: _asDouble(root['total']),
       paidAt: root['paid_at']?.toString(),
       placedAt: root['placed_at']?.toString() ?? root['created_at']?.toString(),
-      items: ((root['items'] as List?) ?? [])
-          .map((e) => OrderTrackingItem.fromJson(Map<String, dynamic>.from(e)))
-          .toList(),
-      history: ((root['history'] as List?) ?? [])
-          .map(
-            (e) => OrderTrackingHistory.fromJson(Map<String, dynamic>.from(e)),
-          )
-          .toList(),
+      items: rawItems.map(OrderTrackingItem.fromJson).toList(),
+      history: rawHistory.map(OrderTrackingHistoryEntry.fromJson).toList(),
     );
   }
 
-  static double? _toDouble(dynamic value) {
+  static int? _asInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    return int.tryParse(value.toString());
+  }
+
+  static double? _asDouble(dynamic value) {
     if (value == null) return null;
     if (value is num) return value.toDouble();
     return double.tryParse(value.toString());
@@ -96,7 +121,7 @@ class OrderTrackingItem {
   final double? totalPrice;
   final String? imageUrl;
 
-  OrderTrackingItem({
+  const OrderTrackingItem({
     required this.name,
     this.variant,
     this.sku,
@@ -114,33 +139,46 @@ class OrderTrackingItem {
           json['product_name']?.toString() ??
           json['name']?.toString() ??
           'Item',
-      variant: json['variant_name']?.toString(),
+      variant: json['variant_name']?.toString() ?? json['variant']?.toString(),
       sku: json['sku']?.toString(),
       unitType: json['unit_type']?.toString(),
-      unitQty: OrderTrackingModel._toDouble(json['unit_qty']),
-      qty: int.tryParse(json['qty']?.toString() ?? '0') ?? 0,
-      unitPrice: OrderTrackingModel._toDouble(
-        json['unit_price'] ?? json['price_used'] ?? json['price'],
-      ),
-      totalPrice: OrderTrackingModel._toDouble(
-        json['total_price'] ?? json['line_total'],
-      ),
+      unitQty: _asDouble(json['unit_qty']),
+      qty: _asInt(json['qty']) ?? 0,
+      unitPrice: _asDouble(json['unit_price']) ?? _asDouble(json['price_used']),
+      totalPrice:
+          _asDouble(json['total_price']) ?? _asDouble(json['line_total']),
       imageUrl: json['image_url']?.toString(),
     );
   }
+
+  static int? _asInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    return int.tryParse(value.toString());
+  }
+
+  static double? _asDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    return double.tryParse(value.toString());
+  }
 }
 
-class OrderTrackingHistory {
+class OrderTrackingHistoryEntry {
   final String status;
   final String? note;
   final String? createdAt;
 
-  OrderTrackingHistory({required this.status, this.note, this.createdAt});
+  const OrderTrackingHistoryEntry({
+    required this.status,
+    this.note,
+    this.createdAt,
+  });
 
-  factory OrderTrackingHistory.fromJson(Map<String, dynamic> json) {
-    return OrderTrackingHistory(
-      status: json['status']?.toString() ?? '',
-      note: json['note']?.toString(),
+  factory OrderTrackingHistoryEntry.fromJson(Map<String, dynamic> json) {
+    return OrderTrackingHistoryEntry(
+      status: json['status']?.toString() ?? 'pending',
+      note: json['note']?.toString() ?? json['message']?.toString(),
       createdAt: json['created_at']?.toString(),
     );
   }

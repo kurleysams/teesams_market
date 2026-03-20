@@ -13,7 +13,7 @@ class CatalogApi {
   Future<List<catalog_model.Category>> fetchCategories({
     required String tenantSlug,
   }) async {
-    final dio = _dio ?? ApiClient(tenantSlug: tenantSlug).dio;
+    final dio = _dio ?? (await ApiClient.create(tenantSlug: tenantSlug)).dio;
     final requestUrl = '${dio.options.baseUrl}${Endpoints.catalog}';
 
     debugPrint('--- fetchCatalog/categories ---');

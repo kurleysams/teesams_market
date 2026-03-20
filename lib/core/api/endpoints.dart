@@ -11,6 +11,11 @@ class Endpoints {
   static const myOrders = 'v1/me/orders';
   static String myOrderDetails(int orderId) => 'v1/me/orders/$orderId';
 
+  static const authRegister = 'v1/auth/register';
+  static const authLogin = 'v1/auth/login';
+  static const authMe = 'v1/auth/me';
+  static const authLogout = 'v1/auth/logout';
+
   static const createPayment = 'v1/payments/create';
 
   static String trackOrder(String orderNumber) =>

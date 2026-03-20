@@ -1,6 +1,3 @@
-// lib/features/orders/screens/checkout_screen.dart
-// lib/features/orders/screens/checkout_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:provider/provider.dart';
@@ -11,7 +8,6 @@ import '../../cart/data/checkout_api.dart';
 import '../../cart/data/stripe_checkout_service.dart';
 import '../../cart/models/cart_item.dart';
 import '../../cart/models/checkout_payment_models.dart';
-import '../../cart/screens/order_pending_page.dart';
 import '../../cart/state/cart_provider.dart';
 import '../../tenant/state/tenant_provider.dart';
 
@@ -29,19 +25,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   final _addressCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
 
-  late CheckoutApi _api;
-  late StripeCheckoutService _checkoutService;
+  CheckoutApi? _api;
+  StripeCheckoutService? _checkoutService;
 
   bool _submitting = false;
-
-  @override
-  void initState() {
-    super.initState();
-
-    final apiClient = ApiClient(tenantSlug: 'fishseafoods');
-    _api = CheckoutApi(apiClient.dio);
-    _checkoutService = StripeCheckoutService(_api);
-  }
 
   @override
   void dispose() {
@@ -81,7 +68,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
     if (!_formKey.currentState!.validate()) return;
 
-    final tenantSlug = tenantProvider.tenant.slug;
+    final tenant = tenantProvider.tenant;
+    final tenantSlug = tenant?.slug ?? '';
+
     if (tenantSlug.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Store information is missing')),
@@ -94,9 +83,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     });
 
     try {
-      final apiClient = ApiClient(tenantSlug: tenantSlug);
+      final apiClient = await ApiClient.create(tenantSlug: tenantSlug);
       _api = CheckoutApi(apiClient.dio);
-      _checkoutService = StripeCheckoutService(_api);
+      _checkoutService = StripeCheckoutService(_api!);
 
       final request = CreatePaymentRequest(
         customerName: _nameCtrl.text.trim(),
@@ -109,18 +98,21 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         }).toList(),
       );
 
-      final result = await _checkoutService.pay(request: request);
+      final result = await _checkoutService!.pay(request: request);
+
+      // Clear cart only after confirmed successful payment flow
+      await context.read<CartProvider>().clearCart();
 
       if (!mounted) return;
 
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => OrderPendingPage(
-            orderId: result.orderId,
-            orderNumber: result.orderNumber,
-            api: _api,
-          ),
-        ),
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        '/order-success',
+        (_) => false,
+        arguments: {
+          'orderId': result.orderId,
+          'orderNumber': result.orderNumber,
+        },
       );
     } on StripeException catch (e) {
       if (!mounted) return;

@@ -2,8 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'core/theme/app_theme.dart';
+import 'features/auth/screens/login_screen.dart';
+import 'features/auth/screens/register_screen.dart';
+import 'features/auth/state/auth_provider.dart';
 import 'features/cart/screens/cart_screen.dart';
 import 'features/cart/state/cart_provider.dart';
+import 'features/catalog/models/product.dart';
 import 'features/catalog/screens/catalog_screen.dart';
 import 'features/catalog/screens/product_details_screen.dart';
 import 'features/catalog/state/catalog_provider.dart';
@@ -14,7 +18,6 @@ import 'features/orders/state/order_provider.dart';
 import 'features/payments/state/payment_provider.dart';
 import 'features/tenant/screens/tenant_selector.dart';
 import 'features/tenant/state/tenant_provider.dart';
-import 'features/catalog/models/product.dart';
 
 class TeesamsMarketApp extends StatelessWidget {
   const TeesamsMarketApp({super.key});
@@ -23,6 +26,7 @@ class TeesamsMarketApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        ChangeNotifierProvider<AuthProvider>(create: (_) => AuthProvider()),
         ChangeNotifierProvider<TenantProvider>(
           create: (_) => TenantProvider()..loadTenant(),
         ),
@@ -48,12 +52,24 @@ class TeesamsMarketApp extends StatelessWidget {
         theme: AppTheme.light(),
         home: const _AppEntry(),
         routes: {
+          '/catalog-home': (_) => const _AppEntry(),
           '/tenant-selector': (_) => const TenantSelector(),
           '/cart': (_) => const CartScreen(),
           '/checkout': (_) => const CheckoutScreen(),
           '/order-success': (_) => const OrderSuccessScreen(),
+          '/login': (_) => const LoginScreen(),
+          '/register': (_) => const RegisterScreen(),
           '/my-orders': (context) {
-            final tenant = context.read<TenantProvider>().tenant;
+            final auth = Provider.of<AuthProvider>(context, listen: false);
+            final tenant = Provider.of<TenantProvider>(
+              context,
+              listen: false,
+            ).tenant;
+
+            if (!auth.isAuthenticated) {
+              return const LoginScreen();
+            }
+
             return MyOrdersScreen(tenantSlug: tenant?.slug ?? '');
           },
         },
@@ -89,12 +105,19 @@ class _AppEntryState extends State<_AppEntry> {
 
     final tenantProvider = context.watch<TenantProvider>();
     final catalogProvider = context.read<CatalogProvider>();
+    final authProvider = context.read<AuthProvider>();
     final tenant = tenantProvider.tenant;
 
     if (tenant != null && tenant.slug != _lastTenantSlug) {
       _lastTenantSlug = tenant.slug;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        catalogProvider.loadCatalogForTenant(tenant.slug);
+
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+
+        await catalogProvider.loadCatalogForTenant(tenant.slug);
+        if (!mounted) return;
+
+        await authProvider.loadSession(tenantSlug: tenant.slug);
       });
     }
   }

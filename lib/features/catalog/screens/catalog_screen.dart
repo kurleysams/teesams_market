@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../shared/widgets/cart_icon_button.dart';
+
 import '../../../core/config/app_config.dart';
 import '../../../shared/components/store_header.dart';
+import '../../../shared/widgets/cart_icon_button.dart';
+import '../../auth/screens/login_screen.dart';
+import '../../auth/state/auth_provider.dart';
+import '../../orders/screens/my_orders_screen.dart';
 import '../../tenant/state/tenant_provider.dart';
 import '../state/catalog_provider.dart';
 
@@ -24,6 +28,50 @@ class _CatalogScreenState extends State<CatalogScreen> {
 
   void _openStoreSelector() {
     Navigator.pushNamed(context, '/tenant-selector');
+  }
+
+  Future<void> _openMyOrders() async {
+    final auth = context.read<AuthProvider>();
+
+    if (!auth.isAuthenticated) {
+      await Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
+
+      if (!mounted) return;
+    }
+
+    final authAfter = context.read<AuthProvider>();
+    if (!authAfter.isAuthenticated) return;
+
+    final tenantSlug = context.read<TenantProvider>().tenant?.slug ?? '';
+
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => MyOrdersScreen(tenantSlug: tenantSlug)),
+    );
+  }
+
+  Future<void> _handleAccountAction(String value) async {
+    final auth = context.read<AuthProvider>();
+    final tenantSlug = context.read<TenantProvider>().tenant?.slug ?? '';
+
+    switch (value) {
+      case 'orders':
+        await _openMyOrders();
+        break;
+      case 'login':
+        await Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
+        break;
+      case 'logout':
+        await auth.logout(tenantSlug: tenantSlug);
+        if (!mounted) return;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Signed out')));
+        break;
+    }
   }
 
   String? _normalizeUrl(String? value) {
@@ -48,6 +96,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
   Widget build(BuildContext context) {
     final catalog = context.watch<CatalogProvider>();
     final tenantProvider = context.watch<TenantProvider>();
+    final auth = context.watch<AuthProvider>();
 
     final storeName = tenantProvider.tenant?.name?.trim().isNotEmpty == true
         ? tenantProvider.tenant!.name.trim()
@@ -77,6 +126,22 @@ class _CatalogScreenState extends State<CatalogScreen> {
           ),
         ),
         actions: [
+          PopupMenuButton<String>(
+            onSelected: _handleAccountAction,
+            itemBuilder: (context) {
+              if (auth.isAuthenticated) {
+                return const [
+                  PopupMenuItem(value: 'orders', child: Text('My Orders')),
+                  PopupMenuItem(value: 'logout', child: Text('Logout')),
+                ];
+              }
+
+              return const [
+                PopupMenuItem(value: 'login', child: Text('Sign in')),
+              ];
+            },
+            icon: const Icon(Icons.person_outline),
+          ),
           CartIconButton(onTap: () => Navigator.pushNamed(context, '/cart')),
           const SizedBox(width: 4),
         ],
