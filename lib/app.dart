@@ -8,6 +8,7 @@ import 'features/catalog/screens/catalog_screen.dart';
 import 'features/catalog/screens/product_details_screen.dart';
 import 'features/catalog/state/catalog_provider.dart';
 import 'features/orders/screens/checkout_screen.dart';
+import 'features/orders/screens/my_orders_screen.dart';
 import 'features/orders/screens/order_success_screen.dart';
 import 'features/orders/state/order_provider.dart';
 import 'features/payments/state/payment_provider.dart';
@@ -51,6 +52,10 @@ class TeesamsMarketApp extends StatelessWidget {
           '/cart': (_) => const CartScreen(),
           '/checkout': (_) => const CheckoutScreen(),
           '/order-success': (_) => const OrderSuccessScreen(),
+          '/my-orders': (context) {
+            final tenant = context.read<TenantProvider>().tenant;
+            return MyOrdersScreen(tenantSlug: tenant?.slug ?? '');
+          },
         },
         onGenerateRoute: (settings) {
           if (settings.name == '/product-details') {
