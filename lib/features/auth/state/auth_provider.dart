@@ -44,7 +44,12 @@ class AuthProvider extends ChangeNotifier {
 
       if (data is Map<String, dynamic> &&
           data['user'] is Map<String, dynamic>) {
-        _user = AuthUser.fromJson(Map<String, dynamic>.from(data['user']));
+        final userJson = Map<String, dynamic>.from(data['user']);
+        final profileJson = data['profile'] is Map<String, dynamic>
+            ? Map<String, dynamic>.from(data['profile'])
+            : null;
+
+        _user = AuthUser.fromJson(userJson, profileJson: profileJson);
       } else {
         _token = null;
         _user = null;
@@ -90,16 +95,21 @@ class AuthProvider extends ChangeNotifier {
       }
 
       _token = token;
-      _user = AuthUser.fromJson(Map<String, dynamic>.from(userJson));
       await AuthStorage().saveToken(token);
-      debugPrint('LOGIN TOKEN SAVED 1 -> $token');
+
+      final profileJson = data['profile'] is Map<String, dynamic>
+          ? Map<String, dynamic>.from(data['profile'])
+          : null;
+
+      _user = AuthUser.fromJson(
+        Map<String, dynamic>.from(userJson),
+        profileJson: profileJson,
+      );
     } on DioException catch (e) {
       final data = e.response?.data;
 
       if (data is Map && data['message'] != null) {
         _error = data['message'].toString();
-      } else if (e.response?.statusCode == 422) {
-        _error = 'Invalid email or password';
       } else {
         _error = e.message ?? 'Unable to login';
       }
@@ -153,9 +163,16 @@ class AuthProvider extends ChangeNotifier {
       }
 
       _token = token;
-      _user = AuthUser.fromJson(Map<String, dynamic>.from(userJson));
       await AuthStorage().saveToken(token);
-      debugPrint('LOGIN TOKEN SAVED 2 -> $token');
+
+      final profileJson = data['profile'] is Map<String, dynamic>
+          ? Map<String, dynamic>.from(data['profile'])
+          : null;
+
+      _user = AuthUser.fromJson(
+        Map<String, dynamic>.from(userJson),
+        profileJson: profileJson,
+      );
     } on DioException catch (e) {
       final data = e.response?.data;
 
@@ -163,6 +180,71 @@ class AuthProvider extends ChangeNotifier {
         _error = data['message'].toString();
       } else {
         _error = e.message ?? 'Unable to register';
+      }
+
+      throw Exception(_error);
+    } catch (e) {
+      _error = e.toString().replaceFirst('Exception: ', '');
+      throw Exception(_error);
+    } finally {
+      _loading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> updateProfile({
+    required String tenantSlug,
+    String? name,
+    String? phone,
+    String? defaultDeliveryAddress,
+    String? defaultFulfilmentType,
+  }) async {
+    if (_token == null || _token!.isEmpty) {
+      throw Exception('Not authenticated');
+    }
+
+    _loading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final api = await ApiClient.create(
+        tenantSlug: tenantSlug,
+        authToken: _token,
+      );
+
+      final response = await api.dio.patch(
+        Endpoints.myProfile,
+        data: {
+          'name': name,
+          'phone': phone,
+          'default_delivery_address': defaultDeliveryAddress,
+          'default_fulfilment_type': defaultFulfilmentType,
+        },
+      );
+
+      final data = response.data;
+      if (data is! Map<String, dynamic> ||
+          data['profile'] is! Map<String, dynamic>) {
+        throw Exception('Invalid profile response');
+      }
+
+      final profileJson = Map<String, dynamic>.from(data['profile']);
+
+      _user = (_user ?? const AuthUser(id: 0, name: '', email: '')).copyWith(
+        name: profileJson['name']?.toString(),
+        phone: profileJson['phone']?.toString(),
+        defaultDeliveryAddress: profileJson['default_delivery_address']
+            ?.toString(),
+        defaultFulfilmentType: profileJson['default_fulfilment_type']
+            ?.toString(),
+      );
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      if (data is Map && data['message'] != null) {
+        _error = data['message'].toString();
+      } else {
+        _error = e.message ?? 'Unable to update profile';
       }
 
       throw Exception(_error);
@@ -185,7 +267,6 @@ class AuthProvider extends ChangeNotifier {
         await api.dio.post(Endpoints.authLogout);
       }
     } catch (_) {
-      // Ignore logout failure and clear local session anyway
     } finally {
       _token = null;
       _user = null;

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../../core/api/api_client.dart';
 import '../../../core/config/app_config.dart';
+import '../../auth/state/auth_provider.dart';
 import '../../cart/data/checkout_api.dart';
 import '../../cart/data/stripe_checkout_service.dart';
 import '../../cart/models/cart_item.dart';
@@ -29,6 +30,37 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   StripeCheckoutService? _checkoutService;
 
   bool _submitting = false;
+  bool _prefilled = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    if (_prefilled) return;
+    _prefillFromProfile();
+    _prefilled = true;
+  }
+
+  void _prefillFromProfile() {
+    final auth = context.read<AuthProvider>();
+    final user = auth.user;
+
+    if (user == null) return;
+
+    if (_nameCtrl.text.trim().isEmpty && user.name.trim().isNotEmpty) {
+      _nameCtrl.text = user.name.trim();
+    }
+
+    if (_phoneCtrl.text.trim().isEmpty &&
+        (user.phone?.trim().isNotEmpty ?? false)) {
+      _phoneCtrl.text = user.phone!.trim();
+    }
+
+    if (_addressCtrl.text.trim().isEmpty &&
+        (user.defaultDeliveryAddress?.trim().isNotEmpty ?? false)) {
+      _addressCtrl.text = user.defaultDeliveryAddress!.trim();
+    }
+  }
 
   @override
   void dispose() {
@@ -58,6 +90,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   Future<void> _submit() async {
     final cart = context.read<CartProvider>();
     final tenantProvider = context.read<TenantProvider>();
+    final auth = context.read<AuthProvider>();
 
     if (cart.items.isEmpty) {
       ScaffoldMessenger.of(
@@ -100,7 +133,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
       final result = await _checkoutService!.pay(request: request);
 
-      // Clear cart only after confirmed successful payment flow
+      if (auth.isAuthenticated) {
+        await auth.updateProfile(
+          tenantSlug: tenantSlug,
+          name: _nameCtrl.text.trim(),
+          phone: _phoneCtrl.text.trim(),
+          defaultDeliveryAddress: _addressCtrl.text.trim(),
+          defaultFulfilmentType: 'delivery',
+        );
+      }
+
       await context.read<CartProvider>().clearCart();
 
       if (!mounted) return;
