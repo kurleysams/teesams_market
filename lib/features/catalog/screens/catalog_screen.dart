@@ -451,64 +451,74 @@ class _ActionStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x08000000),
-            blurRadius: 8,
-            offset: Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Expanded(
+    final theme = Theme.of(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (isAuthenticated && (userEmail ?? '').trim().isNotEmpty) ...[
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
             child: Text(
-              isAuthenticated
-                  ? ((userEmail?.trim().isNotEmpty == true)
-                        ? userEmail!
-                        : 'Signed in')
-                  : 'Browse this store',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 13,
-                color: Color(0xFF6B7280),
-                fontWeight: FontWeight.w600,
+              userEmail!,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: const Color(0xFF6B7280),
               ),
             ),
           ),
-          Container(
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: const Color(0xFFE5E7EB)),
-            ),
-            child: IconButton(
-              tooltip: 'Switch store',
-              onPressed: onStoreTap,
-              icon: const Icon(
-                Icons.swap_horiz_rounded,
-                color: Color(0xFF406A9B),
-              ),
-            ),
-          ),
-          if (isAuthenticated) ...[
-            TextButton(onPressed: onProfileTap, child: const Text('Profile')),
-            TextButton(onPressed: onOrdersTap, child: const Text('Orders')),
-          ] else
-            ElevatedButton(
-              onPressed: onSignInTap,
-              child: const Text('Sign in'),
-            ),
         ],
-      ),
+        Row(
+          children: [
+            Expanded(
+              child: SizedBox(
+                height: 52,
+                child: OutlinedButton.icon(
+                  onPressed: onStoreTap,
+                  icon: const Icon(Icons.store_mall_directory_outlined),
+                  label: const Text('Store'),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: SizedBox(
+                height: 52,
+                child: OutlinedButton.icon(
+                  onPressed: onOrdersTap,
+                  icon: const Icon(Icons.receipt_long_outlined),
+                  label: const Text('Orders'),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: SizedBox(
+                height: 52,
+                child: OutlinedButton.icon(
+                  onPressed: onProfileTap,
+                  icon: const Icon(Icons.person_outline),
+                  label: Text(isAuthenticated ? 'Profile' : 'Guest'),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: SizedBox(
+                height: 52,
+                child: ElevatedButton.icon(
+                  onPressed: isAuthenticated ? onProfileTap : onSignInTap,
+                  icon: Icon(isAuthenticated ? Icons.person : Icons.login),
+                  label: Text(isAuthenticated ? 'Account' : 'Sign In'),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import 'core/theme/app_theme.dart';
 import 'features/auth/screens/login_screen.dart';
+import 'features/auth/screens/mode_picker_screen.dart';
 import 'features/auth/screens/register_screen.dart';
 import 'features/auth/state/auth_provider.dart';
 import 'features/cart/screens/cart_screen.dart';
@@ -17,7 +18,14 @@ import 'features/orders/screens/order_success_screen.dart';
 import 'features/orders/state/order_provider.dart';
 import 'features/payments/state/payment_provider.dart';
 import 'features/tenant/screens/tenant_selector.dart';
+import 'features/tenant/screens/tenant_shell_screen.dart';
+import 'features/tenant/state/tenant_mode_provider.dart';
+import 'features/tenant/state/tenant_orders_provider.dart';
 import 'features/tenant/state/tenant_provider.dart';
+import 'features/tenant/state/tenant_dashboard_provider.dart';
+import 'features/tenant/state/tenant_store_provider.dart';
+import 'features/tenant/state/tenant_product_provider.dart';
+import 'features/tenant/state/tenant_store_provider.dart';
 
 class TeesamsMarketApp extends StatelessWidget {
   const TeesamsMarketApp({super.key});
@@ -29,6 +37,12 @@ class TeesamsMarketApp extends StatelessWidget {
         ChangeNotifierProvider<AuthProvider>(create: (_) => AuthProvider()),
         ChangeNotifierProvider<TenantProvider>(
           create: (_) => TenantProvider()..loadTenant(),
+        ),
+        ChangeNotifierProvider<TenantModeProvider>(
+          create: (_) => TenantModeProvider(),
+        ),
+        ChangeNotifierProvider<TenantOrdersProvider>(
+          create: (_) => TenantOrdersProvider(),
         ),
         ChangeNotifierProvider<CatalogProvider>(
           create: (_) => CatalogProvider(),
@@ -45,6 +59,18 @@ class TeesamsMarketApp extends StatelessWidget {
             return paymentProvider;
           },
         ),
+        ChangeNotifierProvider<TenantDashboardProvider>(
+          create: (_) => TenantDashboardProvider(),
+        ),
+        ChangeNotifierProvider<TenantStoreProvider>(
+          create: (_) => TenantStoreProvider(),
+        ),
+        ChangeNotifierProvider<TenantStoreProvider>(
+          create: (_) => TenantStoreProvider(),
+        ),
+        ChangeNotifierProvider<TenantProductProvider>(
+          create: (_) => TenantProductProvider(),
+        ),
       ],
       child: MaterialApp(
         title: 'Teesams Market',
@@ -59,6 +85,8 @@ class TeesamsMarketApp extends StatelessWidget {
           '/order-success': (_) => const OrderSuccessScreen(),
           '/login': (_) => const LoginScreen(),
           '/register': (_) => const RegisterScreen(),
+          '/mode-picker': (_) => const ModePickerScreen(),
+          '/tenant-shell': (_) => const TenantShellScreen(),
           '/my-orders': (context) {
             final auth = Provider.of<AuthProvider>(context, listen: false);
             final tenant = Provider.of<TenantProvider>(
@@ -98,6 +126,7 @@ class _AppEntry extends StatefulWidget {
 
 class _AppEntryState extends State<_AppEntry> {
   String? _lastTenantSlug;
+  bool _didInit = false;
 
   @override
   void didChangeDependencies() {
@@ -106,6 +135,7 @@ class _AppEntryState extends State<_AppEntry> {
     final tenantProvider = context.watch<TenantProvider>();
     final catalogProvider = context.read<CatalogProvider>();
     final authProvider = context.read<AuthProvider>();
+    final tenantModeProvider = context.read<TenantModeProvider>();
     final tenant = tenantProvider.tenant;
 
     if (tenant != null && tenant.slug != _lastTenantSlug) {
@@ -118,6 +148,22 @@ class _AppEntryState extends State<_AppEntry> {
         if (!mounted) return;
 
         await authProvider.loadSession(tenantSlug: tenant.slug);
+        if (!mounted) return;
+
+        if (authProvider.isAuthenticated && authProvider.token != null) {
+          await tenantModeProvider.loadBootstrap(
+            tenantSlug: tenant.slug,
+            authToken: authProvider.token,
+          );
+        } else {
+          tenantModeProvider.clear();
+        }
+
+        if (mounted) {
+          setState(() {
+            _didInit = true;
+          });
+        }
       });
     }
   }
@@ -125,8 +171,13 @@ class _AppEntryState extends State<_AppEntry> {
   @override
   Widget build(BuildContext context) {
     final tenantProvider = context.watch<TenantProvider>();
+    final authProvider = context.watch<AuthProvider>();
+    final tenantModeProvider = context.watch<TenantModeProvider>();
 
-    if (tenantProvider.loading) {
+    if (tenantProvider.loading ||
+        authProvider.loading ||
+        tenantModeProvider.loading ||
+        !_didInit) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
@@ -149,7 +200,13 @@ class _AppEntryState extends State<_AppEntry> {
                 Text(tenantProvider.error!, textAlign: TextAlign.center),
                 const SizedBox(height: 16),
                 ElevatedButton(
-                  onPressed: () => tenantProvider.loadTenant(),
+                  onPressed: () {
+                    setState(() {
+                      _didInit = false;
+                      _lastTenantSlug = null;
+                    });
+                    tenantProvider.loadTenant();
+                  },
                   child: const Text('Try again'),
                 ),
               ],
@@ -157,6 +214,19 @@ class _AppEntryState extends State<_AppEntry> {
           ),
         ),
       );
+    }
+
+    if (authProvider.isAuthenticated &&
+        tenantModeProvider.bootstrap != null &&
+        tenantModeProvider.bootstrap!.hasMultipleModes &&
+        tenantModeProvider.selectedMode.isEmpty) {
+      return const ModePickerScreen();
+    }
+
+    if (authProvider.isAuthenticated &&
+        tenantModeProvider.bootstrap != null &&
+        tenantModeProvider.isTenantMode) {
+      return const TenantShellScreen();
     }
 
     return const CatalogScreen();

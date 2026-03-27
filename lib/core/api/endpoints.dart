@@ -12,6 +12,8 @@ class Endpoints {
 
   static const myProfile = 'v1/me/profile';
 
+  static const appBootstrap = 'v1/app/bootstrap';
+
   static const createOrder = 'v1/orders';
   static String order(int orderId) => 'v1/orders/$orderId';
 
@@ -22,4 +24,19 @@ class Endpoints {
 
   static String trackOrder(String orderNumber) =>
       'v1/track/orders/$orderNumber';
+
+  static const tenantProducts = 'v1/tenant/products';
+  static String tenantVariantAvailability(int variantId) =>
+      'v1/tenant/variants/$variantId/availability';
+
+  static const tenantDashboard = 'v1/tenant/dashboard';
+  static const tenantOrders = 'v1/tenant/orders';
+  static String tenantOrderDetails(int orderId) => 'v1/tenant/orders/$orderId';
+  static String tenantOrderTransition(int orderId) =>
+      'v1/tenant/orders/$orderId/transition';
+  static const tenantStore = 'v1/tenant/store';
+  static const tenantStoreStatus = 'v1/tenant/store/status';
+
+  static String tenantProductAvailability(int productId) =>
+      'v1/tenant/products/$productId/availability';
 }

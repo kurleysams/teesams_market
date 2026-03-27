@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../tenant/screens/tenant_shell_screen.dart';
+import '../../tenant/state/tenant_mode_provider.dart';
 import '../../tenant/state/tenant_provider.dart';
 import '../state/auth_provider.dart';
+import 'mode_picker_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -67,8 +70,11 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
+    final authProvider = context.read<AuthProvider>();
+    final tenantModeProvider = context.read<TenantModeProvider>();
+
     try {
-      await context.read<AuthProvider>().login(
+      await authProvider.login(
         tenantSlug: tenantSlug,
         email: _emailCtrl.text.trim(),
         password: _passwordCtrl.text,
@@ -76,10 +82,40 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (!mounted) return;
 
+      if (authProvider.isAuthenticated && authProvider.token != null) {
+        await tenantModeProvider.loadBootstrap(
+          tenantSlug: tenantSlug,
+          authToken: authProvider.token,
+        );
+      }
+
+      if (!mounted) return;
+
+      if (authProvider.isAuthenticated &&
+          tenantModeProvider.bootstrap != null &&
+          tenantModeProvider.bootstrap!.hasMultipleModes &&
+          tenantModeProvider.selectedMode.isEmpty) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const ModePickerScreen()),
+          (route) => false,
+        );
+        return;
+      }
+
+      if (authProvider.isAuthenticated &&
+          tenantModeProvider.bootstrap != null &&
+          tenantModeProvider.isTenantMode) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const TenantShellScreen()),
+          (route) => false,
+        );
+        return;
+      }
+
       Navigator.pushNamedAndRemoveUntil(
         context,
-        '/my-orders',
-        (route) => route.isFirst,
+        '/catalog-home',
+        (route) => false,
       );
     } catch (_) {}
   }
