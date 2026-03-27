@@ -39,4 +39,6 @@ class Endpoints {
 
   static String tenantProductAvailability(int productId) =>
       'v1/tenant/products/$productId/availability';
+  static String tenantOrderCancel(int orderId) =>
+      'v1/tenant/orders/$orderId/cancel';
 }

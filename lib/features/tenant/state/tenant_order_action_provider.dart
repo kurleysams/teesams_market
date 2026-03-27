@@ -28,14 +28,29 @@ class TenantOrderActionProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final result = await _api.transitionOrder(
-        tenantSlug: tenantSlug,
-        authToken: authToken,
-        orderId: orderId,
-        action: action,
-        reasonCode: reasonCode,
-        note: note,
-      );
+      final TenantOrderActionResult result;
+
+      if (action == 'cancel_order') {
+        if (reasonCode == null || reasonCode.trim().isEmpty) {
+          throw Exception('Cancellation reason is required');
+        }
+
+        result = await _api.cancelOrder(
+          tenantSlug: tenantSlug,
+          authToken: authToken,
+          orderId: orderId,
+          reasonCode: reasonCode,
+          note: note,
+        );
+      } else {
+        result = await _api.transitionOrder(
+          tenantSlug: tenantSlug,
+          authToken: authToken,
+          orderId: orderId,
+          action: action,
+          note: note,
+        );
+      }
 
       _message = result.message;
       return result;

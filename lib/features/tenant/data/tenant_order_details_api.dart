@@ -28,7 +28,6 @@ class TenantOrderDetailsApi {
     required String authToken,
     required int orderId,
     required String action,
-    String? reasonCode,
     String? note,
   }) async {
     final api = await ApiClient.create(
@@ -40,8 +39,6 @@ class TenantOrderDetailsApi {
       Endpoints.tenantOrderTransition(orderId),
       data: {
         'action': action,
-        if (reasonCode != null && reasonCode.trim().isNotEmpty)
-          'reason_code': reasonCode.trim(),
         if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
       },
     );
@@ -49,6 +46,34 @@ class TenantOrderDetailsApi {
     final data = response.data;
     if (data is! Map<String, dynamic>) {
       throw Exception('Invalid tenant order transition response');
+    }
+
+    return TenantOrderActionResult.fromJson(data);
+  }
+
+  Future<TenantOrderActionResult> cancelOrder({
+    required String tenantSlug,
+    required String authToken,
+    required int orderId,
+    required String reasonCode,
+    String? note,
+  }) async {
+    final api = await ApiClient.create(
+      tenantSlug: tenantSlug,
+      authToken: authToken,
+    );
+
+    final response = await api.dio.post(
+      Endpoints.tenantOrderCancel(orderId),
+      data: {
+        'reason_code': reasonCode,
+        if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+      },
+    );
+
+    final data = response.data;
+    if (data is! Map<String, dynamic>) {
+      throw Exception('Invalid tenant order cancel response');
     }
 
     return TenantOrderActionResult.fromJson(data);
