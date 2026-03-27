@@ -129,6 +129,18 @@ class _TenantStoreScreenState extends State<TenantStoreScreen> {
     );
   }
 
+  Future<void> _loadMore() async {
+    final tenantSlug = context.read<TenantProvider>().tenant?.slug ?? '';
+    final auth = context.read<AuthProvider>();
+
+    if (tenantSlug.isEmpty || auth.token == null) return;
+
+    await context.read<TenantProductProvider>().loadMore(
+      tenantSlug: tenantSlug,
+      authToken: auth.token!,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final storeProvider = context.watch<TenantStoreProvider>();
@@ -237,9 +249,7 @@ class _TenantStoreScreenState extends State<TenantStoreScreen> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    onChanged: (_) {
-                      setState(() {});
-                    },
+                    onChanged: (_) => setState(() {}),
                     onSubmitted: (_) => _searchProducts(),
                   ),
                   const SizedBox(height: 12),
@@ -256,16 +266,16 @@ class _TenantStoreScreenState extends State<TenantStoreScreen> {
                         style: const TextStyle(color: Colors.red),
                       ),
                     )
-                  else if (productProvider.products.isEmpty)
+                  else if (productProvider.groups.isEmpty)
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 16),
                       child: Text('No products found'),
                     )
-                  else
+                  else ...[
                     Column(
-                      children: productProvider.products.map((group) {
-                        return _ProductGroupCard(
-                          group: group,
+                      children: productProvider.groups.map((categoryGroup) {
+                        return _CategoryGroupCard(
+                          group: categoryGroup,
                           isUpdating: productProvider.isUpdating,
                           onToggle: _toggleVariant,
                           canManageAvailability:
@@ -273,11 +283,75 @@ class _TenantStoreScreenState extends State<TenantStoreScreen> {
                         );
                       }).toList(),
                     ),
+                    const SizedBox(height: 12),
+                    if (productProvider.hasMore)
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton(
+                          onPressed: productProvider.loadingMore
+                              ? null
+                              : _loadMore,
+                          child: productProvider.loadingMore
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : Text(
+                                  'Load more (${productProvider.currentPage}/${productProvider.lastPage})',
+                                ),
+                        ),
+                      ),
+                  ],
                 ],
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _CategoryGroupCard extends StatelessWidget {
+  final TenantProductCategoryGroup group;
+  final bool Function(int variantId) isUpdating;
+  final Future<void> Function(int variantId, bool value) onToggle;
+  final bool canManageAvailability;
+
+  const _CategoryGroupCard({
+    required this.group,
+    required this.isUpdating,
+    required this.onToggle,
+    required this.canManageAvailability,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              group.category.name,
+              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+            ),
+            const SizedBox(height: 10),
+            ...group.products.map((product) {
+              return _ProductGroupCard(
+                group: product,
+                isUpdating: isUpdating,
+                onToggle: onToggle,
+                canManageAvailability: canManageAvailability,
+              );
+            }),
+          ],
+        ),
       ),
     );
   }

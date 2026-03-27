@@ -1,3 +1,42 @@
+class TenantProductCategoryGroup {
+  final TenantProductCategory category;
+  final List<TenantProductAvailabilityGroup> products;
+
+  const TenantProductCategoryGroup({
+    required this.category,
+    required this.products,
+  });
+
+  factory TenantProductCategoryGroup.fromJson(Map<String, dynamic> json) {
+    return TenantProductCategoryGroup(
+      category: TenantProductCategory.fromJson(
+        Map<String, dynamic>.from(json['category'] as Map? ?? {}),
+      ),
+      products: (json['products'] as List<dynamic>? ?? [])
+          .map(
+            (e) => TenantProductAvailabilityGroup.fromJson(
+              Map<String, dynamic>.from(e),
+            ),
+          )
+          .toList(),
+    );
+  }
+}
+
+class TenantProductCategory {
+  final int id;
+  final String name;
+
+  const TenantProductCategory({required this.id, required this.name});
+
+  factory TenantProductCategory.fromJson(Map<String, dynamic> json) {
+    return TenantProductCategory(
+      id: (json['id'] as num?)?.toInt() ?? 0,
+      name: json['name']?.toString() ?? 'Uncategorized',
+    );
+  }
+}
+
 class TenantProductAvailabilityGroup {
   final int id;
   final String name;
@@ -26,6 +65,18 @@ class TenantProductAvailabilityGroup {
             ),
           )
           .toList(),
+    );
+  }
+
+  TenantProductAvailabilityGroup copyWith({
+    List<TenantVariantAvailability>? variants,
+  }) {
+    return TenantProductAvailabilityGroup(
+      id: id,
+      name: name,
+      slug: slug,
+      isActive: isActive,
+      variants: variants ?? this.variants,
     );
   }
 }
