@@ -10,15 +10,15 @@ class TenantProductProvider extends ChangeNotifier {
   bool _loading = false;
   final Set<int> _updatingIds = {};
   String? _error;
-  List<TenantProductAvailability> _products = [];
+  List<TenantProductAvailabilityGroup> _products = [];
   String _search = '';
 
   bool get loading => _loading;
   String? get error => _error;
-  List<TenantProductAvailability> get products => _products;
+  List<TenantProductAvailabilityGroup> get products => _products;
   String get search => _search;
 
-  bool isUpdating(int productId) => _updatingIds.contains(productId);
+  bool isUpdating(int variantId) => _updatingIds.contains(variantId);
 
   Future<void> loadProducts({
     required String tenantSlug,
@@ -56,10 +56,10 @@ class TenantProductProvider extends ChangeNotifier {
   Future<bool> updateAvailability({
     required String tenantSlug,
     required String authToken,
-    required int productId,
+    required int variantId,
     required bool isAvailable,
   }) async {
-    _updatingIds.add(productId);
+    _updatingIds.add(variantId);
     _error = null;
     notifyListeners();
 
@@ -67,13 +67,25 @@ class TenantProductProvider extends ChangeNotifier {
       final updated = await _api.updateAvailability(
         tenantSlug: tenantSlug,
         authToken: authToken,
-        productId: productId,
+        variantId: variantId,
         isAvailable: isAvailable,
       );
 
-      _products = _products.map((p) {
-        if (p.id == productId) return updated;
-        return p;
+      _products = _products.map((group) {
+        final updatedVariants = group.variants.map((variant) {
+          if (variant.id == variantId) {
+            return updated;
+          }
+          return variant;
+        }).toList();
+
+        return TenantProductAvailabilityGroup(
+          id: group.id,
+          name: group.name,
+          slug: group.slug,
+          isActive: group.isActive,
+          variants: updatedVariants,
+        );
       }).toList();
 
       return true;
@@ -82,14 +94,14 @@ class TenantProductProvider extends ChangeNotifier {
       if (data is Map && data['message'] != null) {
         _error = data['message'].toString();
       } else {
-        _error = e.message ?? 'Unable to update product';
+        _error = e.message ?? 'Unable to update variant';
       }
       return false;
     } catch (e) {
       _error = e.toString().replaceFirst('Exception: ', '');
       return false;
     } finally {
-      _updatingIds.remove(productId);
+      _updatingIds.remove(variantId);
       notifyListeners();
     }
   }

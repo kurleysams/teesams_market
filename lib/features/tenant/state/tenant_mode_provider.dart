@@ -125,4 +125,18 @@ class TenantModeProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
   }
+
+  bool hasPermission(String permission) {
+    final membership = _selectedMembership;
+    if (membership == null) return false;
+    return membership.permissions.contains(permission);
+  }
+
+  bool get canReadOrders => hasPermission('orders.read');
+  bool get canUpdateOrderStatus => hasPermission('orders.update_status');
+  bool get canCancelOrders => hasPermission('orders.cancel');
+  bool get canManageStoreStatus => hasPermission('store_status.manage');
+  bool get canManageProductAvailability =>
+      hasPermission('product_availability.manage');
+  bool get canManageStaff => hasPermission('staff.manage');
 }

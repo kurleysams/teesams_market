@@ -53,6 +53,8 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
     String? status,
   }) async {
     final tenantMode = context.read<TenantModeProvider>();
+    if (!tenantMode.canReadOrders) return;
+
     final auth = context.read<AuthProvider>();
     final storefrontTenant = context.read<TenantProvider>().tenant?.slug ?? '';
     final storeId = tenantMode.selectedStoreId;
@@ -77,6 +79,9 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
   }
 
   Future<void> _openOrderDetails(TenantOrderSummary order) async {
+    final tenantMode = context.read<TenantModeProvider>();
+    if (!tenantMode.canReadOrders) return;
+
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => MultiProvider(

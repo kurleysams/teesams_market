@@ -51,7 +51,26 @@ class _TenantOrderDetailsScreenState extends State<TenantOrderDetailsScreen> {
     final detailsProvider = context.read<TenantOrderDetailsProvider>();
     final actionProvider = context.read<TenantOrderActionProvider>();
     final currentOrder = detailsProvider.order;
+    final tenantMode = context.read<TenantModeProvider>();
+    final storeId = tenantMode.selectedStoreId;
 
+    if (action.key == 'cancel_order' && !tenantMode.canCancelOrders) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You do not have permission to cancel orders'),
+        ),
+      );
+      return;
+    }
+
+    if (action.key != 'cancel_order' && !tenantMode.canUpdateOrderStatus) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You do not have permission to update orders'),
+        ),
+      );
+      return;
+    }
     if (storefrontTenant.isEmpty ||
         auth.token == null ||
         currentOrder == null) {
@@ -93,9 +112,6 @@ class _TenantOrderDetailsScreenState extends State<TenantOrderDetailsScreen> {
     }
 
     await _load();
-
-    final tenantMode = context.read<TenantModeProvider>();
-    final storeId = tenantMode.selectedStoreId;
 
     if (storeId != null) {
       await context.read<TenantOrdersProvider>().loadOrders(
@@ -684,7 +700,16 @@ class _ActionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (actions.isEmpty) {
+    final tenantMode = context.watch<TenantModeProvider>();
+
+    final visibleActions = actions.where((action) {
+      if (action.key == 'cancel_order') {
+        return tenantMode.canCancelOrders;
+      }
+      return tenantMode.canUpdateOrderStatus;
+    }).toList();
+
+    if (visibleActions.isEmpty) {
       return const SizedBox.shrink();
     }
 
@@ -705,7 +730,7 @@ class _ActionBar extends StatelessWidget {
         child: Wrap(
           spacing: 8,
           runSpacing: 8,
-          children: actions.map((action) {
+          children: visibleActions.map((action) {
             final isDestructive = action.destructive;
             return ElevatedButton(
               onPressed: loading ? null : () => onTap(action),

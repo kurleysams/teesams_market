@@ -3,7 +3,7 @@ import '../../../core/api/endpoints.dart';
 import '../models/tenant_product_availability.dart';
 
 class TenantProductApi {
-  Future<List<TenantProductAvailability>> fetchProducts({
+  Future<List<TenantProductAvailabilityGroup>> fetchProducts({
     required String tenantSlug,
     required String authToken,
     String? search,
@@ -27,16 +27,17 @@ class TenantProductApi {
 
     return (data['data'] as List<dynamic>? ?? [])
         .map(
-          (e) =>
-              TenantProductAvailability.fromJson(Map<String, dynamic>.from(e)),
+          (e) => TenantProductAvailabilityGroup.fromJson(
+            Map<String, dynamic>.from(e),
+          ),
         )
         .toList();
   }
 
-  Future<TenantProductAvailability> updateAvailability({
+  Future<TenantVariantAvailability> updateAvailability({
     required String tenantSlug,
     required String authToken,
-    required int productId,
+    required int variantId,
     required bool isAvailable,
   }) async {
     final api = await ApiClient.create(
@@ -45,17 +46,17 @@ class TenantProductApi {
     );
 
     final response = await api.dio.patch(
-      Endpoints.tenantProductAvailability(productId),
+      Endpoints.tenantVariantAvailability(variantId),
       data: {'is_available': isAvailable},
     );
 
     final data = response.data;
-    if (data is! Map<String, dynamic> || data['product'] is! Map) {
-      throw Exception('Invalid tenant product availability response');
+    if (data is! Map<String, dynamic> || data['variant'] is! Map) {
+      throw Exception('Invalid tenant variant availability response');
     }
 
-    return TenantProductAvailability.fromJson(
-      Map<String, dynamic>.from(data['product']),
+    return TenantVariantAvailability.fromJson(
+      Map<String, dynamic>.from(data['variant']),
     );
   }
 }

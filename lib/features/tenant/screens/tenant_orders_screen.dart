@@ -447,7 +447,17 @@ class _TenantOrderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final statusColor = _statusColor(context);
-    final quickActions = order.allowedActions.take(2).toList();
+    final tenantMode = context.watch<TenantModeProvider>();
+
+    final quickActions = order.allowedActions
+        .where((action) {
+          if (action.key == 'cancel_order') {
+            return tenantMode.canCancelOrders;
+          }
+          return tenantMode.canUpdateOrderStatus;
+        })
+        .take(2)
+        .toList();
 
     return Card(
       child: InkWell(
@@ -479,7 +489,7 @@ class _TenantOrderCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(999),
                     ),
                     child: Text(
-                      TenantOrderUi.summaryStatusLabel(order),
+                      order.statusLabel,
                       style: TextStyle(
                         color: statusColor,
                         fontWeight: FontWeight.w700,
@@ -511,18 +521,6 @@ class _TenantOrderCard extends StatelessWidget {
                 'Created: ${order.createdAt}',
                 style: const TextStyle(color: Color(0xFF6B7280), fontSize: 12),
               ),
-              if (order.scheduledFor != null &&
-                  order.scheduledFor!.trim().isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text(
-                    'Scheduled: ${order.scheduledFor}',
-                    style: const TextStyle(
-                      color: Color(0xFF6B7280),
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
               if (quickActions.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 Wrap(
@@ -534,7 +532,7 @@ class _TenantOrderCard extends StatelessWidget {
                       style: OutlinedButton.styleFrom(
                         foregroundColor: action.destructive ? Colors.red : null,
                       ),
-                      child: Text(TenantOrderUi.actionLabel(action.key)),
+                      child: Text(action.label),
                     );
                   }).toList(),
                 ),
