@@ -1,175 +1,103 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../auth/screens/login_screen.dart';
 import '../../auth/state/auth_provider.dart';
-import '../state/tenant_mode_provider.dart';
+import '../../auth/utils/mode_navigation.dart';
 import '../state/tenant_provider.dart';
 import 'tenant_dashboard_screen.dart';
 import 'tenant_orders_screen.dart';
 import 'tenant_store_screen.dart';
 
-class TenantShellController extends InheritedWidget {
-  final void Function() goToOrders;
-
-  const TenantShellController({
-    super.key,
-    required this.goToOrders,
-    required super.child,
-  });
-
-  static TenantShellController? of(BuildContext context) {
-    return context.dependOnInheritedWidgetOfExactType<TenantShellController>();
-  }
-
-  @override
-  bool updateShouldNotify(TenantShellController oldWidget) => false;
-}
-
 class TenantShellScreen extends StatefulWidget {
-  const TenantShellScreen({super.key});
+  final int initialIndex;
+
+  const TenantShellScreen({super.key, this.initialIndex = 0});
 
   @override
   State<TenantShellScreen> createState() => _TenantShellScreenState();
 }
 
 class _TenantShellScreenState extends State<TenantShellScreen> {
-  int _currentIndex = 0;
+  late int _currentIndex;
 
-  void _goToOrders() {
-    final tenantMode = context.read<TenantModeProvider>();
-    final items = _itemsFor(tenantMode);
-    final index = items.indexWhere(
-      (item) => item.key == const ValueKey('orders'),
-    );
-    if (index >= 0) {
-      setState(() {
-        _currentIndex = index;
-      });
-    }
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.initialIndex.clamp(0, 2);
   }
 
-  List<_ShellItem> _itemsFor(TenantModeProvider tenantMode) {
-    final items = <_ShellItem>[
-      const _ShellItem(
-        key: ValueKey('dashboard'),
-        page: TenantDashboardScreen(),
-        destination: NavigationDestination(
-          icon: Icon(Icons.dashboard_outlined),
-          selectedIcon: Icon(Icons.dashboard),
-          label: 'Dashboard',
-        ),
-      ),
-    ];
+  Future<void> _handleMenu(String value) async {
+    switch (value) {
+      case 'customer_view':
+        await ModeNavigation.goToCustomer(context);
+        break;
 
-    if (tenantMode.canReadOrders) {
-      items.add(
-        const _ShellItem(
-          key: ValueKey('orders'),
-          page: TenantOrdersScreen(),
-          destination: NavigationDestination(
-            icon: Icon(Icons.receipt_long_outlined),
-            selectedIcon: Icon(Icons.receipt_long),
-            label: 'Orders',
-          ),
-        ),
-      );
+      case 'logout':
+        final tenantSlug = context.read<TenantProvider>().tenant?.slug ?? '';
+        await context.read<AuthProvider>().logout(tenantSlug: tenantSlug);
+        if (!mounted) return;
+        await ModeNavigation.goToCustomer(context);
+        break;
     }
-
-    if (tenantMode.canManageStoreStatus ||
-        tenantMode.canManageProductAvailability) {
-      items.add(
-        const _ShellItem(
-          key: ValueKey('store'),
-          page: TenantStoreScreen(),
-          destination: NavigationDestination(
-            icon: Icon(Icons.store_mall_directory_outlined),
-            selectedIcon: Icon(Icons.store_mall_directory),
-            label: 'Store',
-          ),
-        ),
-      );
-    }
-
-    return items;
   }
 
   @override
   Widget build(BuildContext context) {
-    final auth = context.read<AuthProvider>();
-    final tenantMode = context.watch<TenantModeProvider>();
-    final items = _itemsFor(tenantMode);
+    final tenant = context.watch<TenantProvider>().tenant;
+    final tenantName = tenant?.name?.trim().isNotEmpty == true
+        ? tenant!.name.trim()
+        : 'Store';
 
-    if (_currentIndex >= items.length) {
-      _currentIndex = 0;
-    }
-
-    return TenantShellController(
-      goToOrders: _goToOrders,
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text(tenantMode.selectedStoreName ?? 'Tenant Mode'),
-          actions: [
-            IconButton(
-              onPressed: () async {
-                await tenantMode.setSelectedMode('customer');
-                if (!mounted) return;
-                Navigator.of(
-                  context,
-                ).pushNamedAndRemoveUntil('/catalog-home', (route) => false);
-              },
-              icon: const Icon(Icons.storefront_outlined),
-              tooltip: 'Switch to customer mode',
-            ),
-            IconButton(
-              onPressed: () async {
-                final storefrontTenant = context
-                    .read<TenantProvider>()
-                    .tenant
-                    ?.slug;
-
-                if (storefrontTenant != null && storefrontTenant.isNotEmpty) {
-                  await auth.logout(tenantSlug: storefrontTenant);
-                } else {
-                  await auth.forceClearSession();
-                }
-
-                tenantMode.clear();
-
-                if (!mounted) return;
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
-                  (route) => false,
-                );
-              },
-              icon: const Icon(Icons.logout),
-              tooltip: 'Logout',
-            ),
-          ],
-        ),
-        body: items[_currentIndex].page,
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: _currentIndex,
-          onDestinationSelected: (value) {
-            setState(() {
-              _currentIndex = value;
-            });
-          },
-          destinations: items.map((e) => e.destination).toList(),
-        ),
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(tenantName),
+        actions: [
+          PopupMenuButton<String>(
+            onSelected: _handleMenu,
+            itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: 'customer_view',
+                child: Text('View customer storefront'),
+              ),
+              PopupMenuItem(value: 'logout', child: Text('Sign out')),
+            ],
+          ),
+        ],
+      ),
+      body: IndexedStack(
+        index: _currentIndex,
+        children: const [
+          TenantDashboardScreen(),
+          TenantOrdersScreen(),
+          TenantStoreScreen(),
+        ],
+      ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _currentIndex,
+        onDestinationSelected: (index) {
+          if (_currentIndex == index) return;
+          setState(() {
+            _currentIndex = index;
+          });
+        },
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.dashboard_outlined),
+            selectedIcon: Icon(Icons.dashboard),
+            label: 'Dashboard',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.receipt_long_outlined),
+            selectedIcon: Icon(Icons.receipt_long),
+            label: 'Orders',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.storefront_outlined),
+            selectedIcon: Icon(Icons.storefront),
+            label: 'Store',
+          ),
+        ],
       ),
     );
   }
-}
-
-class _ShellItem {
-  final Key key;
-  final Widget page;
-  final NavigationDestination destination;
-
-  const _ShellItem({
-    required this.key,
-    required this.page,
-    required this.destination,
-  });
 }

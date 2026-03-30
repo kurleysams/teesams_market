@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 
 import '../../../core/api/api_client.dart';
 import '../../../core/config/app_config.dart';
+import '../../auth/screens/login_screen.dart';
+import '../../auth/screens/register_screen.dart';
 import '../../auth/state/auth_provider.dart';
 import '../../cart/data/checkout_api.dart';
 import '../../cart/data/stripe_checkout_service.dart';
@@ -22,6 +24,7 @@ class CheckoutScreen extends StatefulWidget {
 class _CheckoutScreenState extends State<CheckoutScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
   final _addressCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
@@ -51,6 +54,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       _nameCtrl.text = user.name.trim();
     }
 
+    if (_emailCtrl.text.trim().isEmpty && user.email.trim().isNotEmpty) {
+      _emailCtrl.text = user.email.trim();
+    }
+
     if (_phoneCtrl.text.trim().isEmpty &&
         (user.phone?.trim().isNotEmpty ?? false)) {
       _phoneCtrl.text = user.phone!.trim();
@@ -65,6 +72,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   @override
   void dispose() {
     _nameCtrl.dispose();
+    _emailCtrl.dispose();
     _phoneCtrl.dispose();
     _addressCtrl.dispose();
     _notesCtrl.dispose();
@@ -85,6 +93,38 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       return '$origin$trimmed';
     }
     return '$origin/$trimmed';
+  }
+
+  String? _validateEmail(String? value) {
+    final text = value?.trim() ?? '';
+    if (text.isEmpty) return 'Enter your email';
+
+    final emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+    if (!emailRegex.hasMatch(text)) {
+      return 'Enter a valid email address';
+    }
+
+    return null;
+  }
+
+  Future<void> _openLogin() async {
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
+
+    if (!mounted) return;
+    _prefillFromProfile();
+    setState(() {});
+  }
+
+  Future<void> _openRegister() async {
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const RegisterScreen()));
+
+    if (!mounted) return;
+    _prefillFromProfile();
+    setState(() {});
   }
 
   Future<void> _submit() async {
@@ -116,12 +156,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     });
 
     try {
-      final apiClient = await ApiClient.create(tenantSlug: tenantSlug);
+      final apiClient = await ApiClient.create(
+        tenantSlug: tenantSlug,
+        authToken: auth.token,
+      );
       _api = CheckoutApi(apiClient.dio);
       _checkoutService = StripeCheckoutService(_api!);
 
       final request = CreatePaymentRequest(
         customerName: _nameCtrl.text.trim(),
+        customerEmail: _emailCtrl.text.trim(),
         customerPhone: _phoneCtrl.text.trim(),
         fulfilmentType: 'delivery',
         deliveryAddress: _addressCtrl.text.trim(),
@@ -187,6 +231,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   @override
   Widget build(BuildContext context) {
     final cart = context.watch<CartProvider>();
+    final auth = context.watch<AuthProvider>();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
@@ -211,6 +256,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   child: ListView(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                     children: [
+                      if (!auth.isAuthenticated) ...[
+                        _GuestCheckoutNotice(
+                          onLoginTap: _openLogin,
+                          onRegisterTap: _openRegister,
+                        ),
+                        const SizedBox(height: 14),
+                      ],
                       _SectionCard(
                         child: Form(
                           key: _formKey,
@@ -236,6 +288,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                   }
                                   return null;
                                 },
+                              ),
+                              const SizedBox(height: 12),
+                              _InputField(
+                                controller: _emailCtrl,
+                                label: 'Email address',
+                                keyboardType: TextInputType.emailAddress,
+                                textInputAction: TextInputAction.next,
+                                validator: _validateEmail,
                               ),
                               const SizedBox(height: 12),
                               _InputField(
@@ -388,6 +448,74 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 ),
               ],
             ),
+    );
+  }
+}
+
+class _GuestCheckoutNotice extends StatelessWidget {
+  final VoidCallback onLoginTap;
+  final VoidCallback onRegisterTap;
+
+  const _GuestCheckoutNotice({
+    required this.onLoginTap,
+    required this.onRegisterTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF6FF),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFBFDBFE)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.info_outline, color: Color(0xFF1D4ED8)),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Checking out as guest',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF1E3A8A),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Use an email address you can access. If you sign in or create an account later with the same email, we can attach this order to your account.',
+            style: TextStyle(
+              fontSize: 13,
+              height: 1.4,
+              color: Color(0xFF1E40AF),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              OutlinedButton(
+                onPressed: onLoginTap,
+                child: const Text('Sign in'),
+              ),
+              OutlinedButton(
+                onPressed: onRegisterTap,
+                child: const Text('Create account'),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

@@ -9,6 +9,7 @@ import '../state/tenant_order_action_provider.dart';
 import '../state/tenant_order_details_provider.dart';
 import '../state/tenant_orders_provider.dart';
 import '../state/tenant_provider.dart';
+import '../utils/tenant_order_ui.dart';
 import 'tenant_order_details_screen.dart';
 import 'tenant_shell_screen.dart';
 
@@ -21,6 +22,7 @@ class TenantDashboardScreen extends StatefulWidget {
 
 class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
   bool _didLoad = false;
+  DateTime? _lastLoadedAt;
 
   @override
   void didChangeDependencies() {
@@ -46,6 +48,11 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
       tenantSlug: storefrontTenant,
       authToken: auth.token!,
     );
+
+    if (!mounted) return;
+    setState(() {
+      _lastLoadedAt = DateTime.now();
+    });
   }
 
   Future<void> _openOrdersTabWithFilter({
@@ -74,8 +81,11 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
 
     if (!mounted) return;
 
-    final shellState = TenantShellController.of(context);
-    shellState?.goToOrders();
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => const TenantShellScreen(initialIndex: 1),
+      ),
+    );
   }
 
   Future<void> _openOrderDetails(TenantOrderSummary order) async {
@@ -114,23 +124,26 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.dashboard_outlined, size: 52),
-              const SizedBox(height: 12),
-              const Text(
-                'Unable to load dashboard',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 8),
-              Text(dashboardProvider.error!, textAlign: TextAlign.center),
-              const SizedBox(height: 16),
-              FilledButton(
-                onPressed: _loadDashboard,
-                child: const Text('Try again'),
-              ),
-            ],
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.dashboard_outlined, size: 52),
+                const SizedBox(height: 12),
+                const Text(
+                  'Unable to load dashboard',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 8),
+                Text(dashboardProvider.error!, textAlign: TextAlign.center),
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: _loadDashboard,
+                  child: const Text('Try again'),
+                ),
+              ],
+            ),
           ),
         ),
       );
@@ -145,11 +158,15 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          const SizedBox(height: 4),
+          _DashboardHeader(
+            lastLoadedAt: _lastLoadedAt,
+            canReadOrders: tenantMode.canReadOrders,
+            onRefresh: _loadDashboard,
+          ),
           const SizedBox(height: 16),
           GridView.count(
             crossAxisCount: 2,
-            childAspectRatio: 1.2,
+            childAspectRatio: 1.05,
             mainAxisSpacing: 12,
             crossAxisSpacing: 12,
             shrinkWrap: true,
@@ -158,6 +175,8 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
               _KpiCard(
                 title: 'Pending',
                 value: dashboard.counts.pending.toString(),
+                icon: Icons.hourglass_top_rounded,
+                accent: const Color(0xFFF59E0B),
                 onTap: () => _openOrdersTabWithFilter(
                   lifecycle: 'active',
                   status: 'pending',
@@ -166,6 +185,8 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
               _KpiCard(
                 title: 'Preparing',
                 value: dashboard.counts.preparing.toString(),
+                icon: Icons.restaurant_rounded,
+                accent: const Color(0xFF7C3AED),
                 onTap: () => _openOrdersTabWithFilter(
                   lifecycle: 'active',
                   status: 'preparing',
@@ -177,12 +198,16 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
                     (dashboard.counts.readyForPickup +
                             dashboard.counts.outForDelivery)
                         .toString(),
+                icon: Icons.local_shipping_outlined,
+                accent: const Color(0xFF0F766E),
                 onTap: () =>
                     _openOrdersTabWithFilter(lifecycle: 'active', status: null),
               ),
               _KpiCard(
                 title: 'Completed Today',
                 value: dashboard.counts.completedToday.toString(),
+                icon: Icons.check_circle_outline,
+                accent: const Color(0xFF16A34A),
                 onTap: () => _openOrdersTabWithFilter(
                   lifecycle: 'completed',
                   status: null,
@@ -193,13 +218,18 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
           const SizedBox(height: 20),
           _SectionCard(
             title: 'Urgent Orders',
-            child: dashboard.urgentOrders.isEmpty
-                ? const Padding(
-                    padding: EdgeInsets.only(top: 4),
-                    child: Text('No urgent orders'),
+            actionLabel: tenantMode.canReadOrders ? 'View all' : null,
+            onActionTap: tenantMode.canReadOrders
+                ? () => _openOrdersTabWithFilter(
+                    lifecycle: 'active',
+                    status: null,
                   )
+                : null,
+            child: dashboard.urgentOrders.isEmpty
+                ? const _SectionEmptyState(message: 'No urgent orders')
                 : Column(
                     children: dashboard.urgentOrders
+                        .take(5)
                         .map(
                           (order) => _MiniOrderTile(
                             order: order,
@@ -212,13 +242,18 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
           const SizedBox(height: 16),
           _SectionCard(
             title: 'Recent Active Orders',
-            child: dashboard.recentActiveOrders.isEmpty
-                ? const Padding(
-                    padding: EdgeInsets.only(top: 4),
-                    child: Text('No recent active orders'),
+            actionLabel: tenantMode.canReadOrders ? 'View all' : null,
+            onActionTap: tenantMode.canReadOrders
+                ? () => _openOrdersTabWithFilter(
+                    lifecycle: 'active',
+                    status: null,
                   )
+                : null,
+            child: dashboard.recentActiveOrders.isEmpty
+                ? const _SectionEmptyState(message: 'No recent active orders')
                 : Column(
                     children: dashboard.recentActiveOrders
+                        .take(8)
                         .map(
                           (order) => _MiniOrderTile(
                             order: order,
@@ -234,39 +269,127 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
   }
 }
 
+class _DashboardHeader extends StatelessWidget {
+  final DateTime? lastLoadedAt;
+  final bool canReadOrders;
+  final VoidCallback onRefresh;
+
+  const _DashboardHeader({
+    required this.lastLoadedAt,
+    required this.canReadOrders,
+    required this.onRefresh,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final subtitle = lastLoadedAt == null
+        ? 'Pull to refresh'
+        : 'Updated ${_formatTime(lastLoadedAt!)}';
+
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            subtitle,
+            style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+          ),
+        ),
+        IconButton(
+          tooltip: 'Refresh',
+          onPressed: onRefresh,
+          icon: const Icon(Icons.refresh),
+        ),
+      ],
+    );
+  }
+
+  static String _formatTime(DateTime value) {
+    final h = value.hour.toString().padLeft(2, '0');
+    final m = value.minute.toString().padLeft(2, '0');
+    return '$h:$m';
+  }
+}
+
 class _KpiCard extends StatelessWidget {
   final String title;
   final String value;
+  final IconData icon;
+  final Color accent;
   final VoidCallback onTap;
 
   const _KpiCard({
     required this.title,
     required this.value,
+    required this.icon,
+    required this.accent,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return Card(
+      elevation: 0,
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: const BorderSide(color: Color(0xFFE5E7EB)),
+      ),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(18),
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
+              Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: accent.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(icon, color: accent, size: 18),
+                  ),
+                  const Spacer(),
+                  const Icon(
+                    Icons.chevron_right,
+                    size: 18,
+                    color: Color(0xFF9CA3AF),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.topLeft,
+                  child: Text(
+                    title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      height: 1.2,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF374151),
+                    ),
+                  ),
                 ),
               ),
-              const Spacer(),
-              Text(value, style: Theme.of(context).textTheme.headlineMedium),
+              const SizedBox(height: 8),
+              Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 28,
+                  height: 1,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF111827),
+                ),
+              ),
             ],
           ),
         ),
@@ -277,26 +400,67 @@ class _KpiCard extends StatelessWidget {
 
 class _SectionCard extends StatelessWidget {
   final String title;
+  final String? actionLabel;
+  final VoidCallback? onActionTap;
   final Widget child;
 
-  const _SectionCard({required this.title, required this.child});
+  const _SectionCard({
+    required this.title,
+    required this.child,
+    this.actionLabel,
+    this.onActionTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Card(
+      elevation: 0,
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: const BorderSide(color: Color(0xFFE5E7EB)),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              title,
-              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 18,
+                    ),
+                  ),
+                ),
+                if (actionLabel != null && onActionTap != null)
+                  TextButton(onPressed: onActionTap, child: Text(actionLabel!)),
+              ],
             ),
             const SizedBox(height: 10),
             child,
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _SectionEmptyState extends StatelessWidget {
+  final String message;
+
+  const _SectionEmptyState({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Text(
+        message,
+        style: const TextStyle(color: Color(0xFF6B7280), fontSize: 14),
       ),
     );
   }
@@ -310,17 +474,62 @@ class _MiniOrderTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      onTap: onTap,
-      title: Text(
-        '#${order.orderNumber} • ${order.customerName}',
-        style: const TextStyle(fontWeight: FontWeight.w700),
+    final statusColor = TenantOrderUi.statusColor(order.status);
+
+    return Column(
+      children: [
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          onTap: onTap,
+          title: Text(
+            '#${order.orderNumber} • ${order.customerName}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                _InlineStatusPill(label: order.statusLabel, color: statusColor),
+                Text(order.orderType.toUpperCase()),
+                Text('£${order.total.toStringAsFixed(2)}'),
+              ],
+            ),
+          ),
+          trailing: const Icon(Icons.chevron_right),
+        ),
+        const Divider(height: 1),
+      ],
+    );
+  }
+}
+
+class _InlineStatusPill extends StatelessWidget {
+  final String label;
+  final Color color;
+
+  const _InlineStatusPill({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(999),
       ),
-      subtitle: Text(
-        '${order.statusLabel} • ${order.orderType.toUpperCase()} • £${order.total.toStringAsFixed(2)}',
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          color: color,
+        ),
       ),
-      trailing: const Icon(Icons.chevron_right),
     );
   }
 }

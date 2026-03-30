@@ -19,12 +19,11 @@ import 'features/orders/state/order_provider.dart';
 import 'features/payments/state/payment_provider.dart';
 import 'features/tenant/screens/tenant_selector.dart';
 import 'features/tenant/screens/tenant_shell_screen.dart';
+import 'features/tenant/state/tenant_dashboard_provider.dart';
 import 'features/tenant/state/tenant_mode_provider.dart';
 import 'features/tenant/state/tenant_orders_provider.dart';
-import 'features/tenant/state/tenant_provider.dart';
-import 'features/tenant/state/tenant_dashboard_provider.dart';
-import 'features/tenant/state/tenant_store_provider.dart';
 import 'features/tenant/state/tenant_product_provider.dart';
+import 'features/tenant/state/tenant_provider.dart';
 import 'features/tenant/state/tenant_store_provider.dart';
 
 class TeesamsMarketApp extends StatelessWidget {
@@ -61,9 +60,6 @@ class TeesamsMarketApp extends StatelessWidget {
         ),
         ChangeNotifierProvider<TenantDashboardProvider>(
           create: (_) => TenantDashboardProvider(),
-        ),
-        ChangeNotifierProvider<TenantStoreProvider>(
-          create: (_) => TenantStoreProvider(),
         ),
         ChangeNotifierProvider<TenantStoreProvider>(
           create: (_) => TenantStoreProvider(),
@@ -155,6 +151,13 @@ class _AppEntryState extends State<_AppEntry> {
             tenantSlug: tenant.slug,
             authToken: authProvider.token,
           );
+
+          if (!mounted) return;
+
+          await _resolveInitialMode(
+            authProvider: authProvider,
+            tenantModeProvider: tenantModeProvider,
+          );
         } else {
           tenantModeProvider.clear();
         }
@@ -165,6 +168,32 @@ class _AppEntryState extends State<_AppEntry> {
           });
         }
       });
+    }
+  }
+
+  Future<void> _resolveInitialMode({
+    required AuthProvider authProvider,
+    required TenantModeProvider tenantModeProvider,
+  }) async {
+    final bootstrap = tenantModeProvider.bootstrap;
+    if (!authProvider.isAuthenticated || bootstrap == null) return;
+
+    if (bootstrap.hasTenantMode) {
+      if (tenantModeProvider.selectedMode != 'tenant') {
+        await tenantModeProvider.setSelectedMode('tenant');
+      }
+      return;
+    }
+
+    if (bootstrap.hasCustomerMode) {
+      if (tenantModeProvider.selectedMode != 'customer') {
+        await tenantModeProvider.setSelectedMode('customer');
+      }
+      return;
+    }
+
+    if (tenantModeProvider.selectedMode.isNotEmpty) {
+      await tenantModeProvider.setSelectedMode('');
     }
   }
 
@@ -214,13 +243,6 @@ class _AppEntryState extends State<_AppEntry> {
           ),
         ),
       );
-    }
-
-    if (authProvider.isAuthenticated &&
-        tenantModeProvider.bootstrap != null &&
-        tenantModeProvider.bootstrap!.hasMultipleModes &&
-        tenantModeProvider.selectedMode.isEmpty) {
-      return const ModePickerScreen();
     }
 
     if (authProvider.isAuthenticated &&

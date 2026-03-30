@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../tenant/screens/tenant_shell_screen.dart';
 import '../../tenant/state/tenant_mode_provider.dart';
 import '../../tenant/state/tenant_provider.dart';
 import '../state/auth_provider.dart';
-import 'mode_picker_screen.dart';
+import '../utils/mode_navigation.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -85,38 +84,22 @@ class _LoginScreenState extends State<LoginScreen> {
       if (authProvider.isAuthenticated && authProvider.token != null) {
         await tenantModeProvider.loadBootstrap(
           tenantSlug: tenantSlug,
-          authToken: authProvider.token,
+          authToken: authProvider.token!,
         );
       }
 
       if (!mounted) return;
 
+      final bootstrap = tenantModeProvider.bootstrap;
+
       if (authProvider.isAuthenticated &&
-          tenantModeProvider.bootstrap != null &&
-          tenantModeProvider.bootstrap!.hasMultipleModes &&
-          tenantModeProvider.selectedMode.isEmpty) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const ModePickerScreen()),
-          (route) => false,
-        );
+          bootstrap != null &&
+          bootstrap.hasTenantMode) {
+        await ModeNavigation.goToTenant(context);
         return;
       }
 
-      if (authProvider.isAuthenticated &&
-          tenantModeProvider.bootstrap != null &&
-          tenantModeProvider.isTenantMode) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const TenantShellScreen()),
-          (route) => false,
-        );
-        return;
-      }
-
-      Navigator.pushNamedAndRemoveUntil(
-        context,
-        '/catalog-home',
-        (route) => false,
-      );
+      await ModeNavigation.goToCustomer(context);
     } catch (_) {}
   }
 
@@ -225,19 +208,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(14),
                                   ),
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                    borderSide: const BorderSide(
-                                      color: Color(0xFFD1D5DB),
-                                    ),
-                                  ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                    borderSide: const BorderSide(
-                                      color: Color(0xFF3B82F6),
-                                      width: 1.2,
-                                    ),
-                                  ),
                                 ),
                               ),
                               const SizedBox(height: 14),
@@ -269,19 +239,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(14),
                                   ),
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                    borderSide: const BorderSide(
-                                      color: Color(0xFFD1D5DB),
-                                    ),
-                                  ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                    borderSide: const BorderSide(
-                                      color: Color(0xFF3B82F6),
-                                      width: 1.2,
-                                    ),
-                                  ),
                                 ),
                               ),
                               const SizedBox(height: 20),
@@ -290,14 +247,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                 height: 52,
                                 child: ElevatedButton(
                                   onPressed: auth.loading ? null : _submit,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF1D4ED8),
-                                    foregroundColor: Colors.white,
-                                    elevation: 0,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(14),
-                                    ),
-                                  ),
                                   child: auth.loading
                                       ? const SizedBox(
                                           width: 18,
@@ -307,13 +256,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                             color: Colors.white,
                                           ),
                                         )
-                                      : const Text(
-                                          'Sign in',
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.w800,
-                                            fontSize: 15,
-                                          ),
-                                        ),
+                                      : const Text('Sign in'),
                                 ),
                               ),
                             ],
@@ -321,15 +264,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      const Text(
-                        'You need to sign in to view My Orders.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Color(0xFF6B7280),
-                          fontSize: 13,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -343,9 +277,8 @@ class _LoginScreenState extends State<LoginScreen> {
                           TextButton(
                             onPressed: auth.loading
                                 ? null
-                                : () {
-                                    Navigator.pushNamed(context, '/register');
-                                  },
+                                : () =>
+                                      Navigator.pushNamed(context, '/register'),
                             child: const Text('Create account'),
                           ),
                         ],

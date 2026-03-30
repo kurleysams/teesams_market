@@ -42,13 +42,48 @@ class TenantProductApi {
         ? Map<String, dynamic>.from(data['meta'])
         : <String, dynamic>{};
 
+    final filters = data['filters'] is Map<String, dynamic>
+        ? Map<String, dynamic>.from(data['filters'])
+        : <String, dynamic>{};
+
+    final categories = (filters['categories'] as List<dynamic>? ?? [])
+        .map(
+          (e) => TenantProductFilterCategory.fromJson(
+            Map<String, dynamic>.from(e),
+          ),
+        )
+        .toList();
+
     return TenantProductResponse(
       groups: groups,
+      categories: categories,
       currentPage: (meta['current_page'] as num?)?.toInt() ?? 1,
       perPage: (meta['per_page'] as num?)?.toInt() ?? perPage,
       total: (meta['total'] as num?)?.toInt() ?? groups.length,
       lastPage: (meta['last_page'] as num?)?.toInt() ?? 1,
       hasMore: meta['has_more'] == true,
+    );
+  }
+
+  Future<void> bulkUpdateAvailability({
+    required String tenantSlug,
+    required String authToken,
+    required bool isAvailable,
+    int? productId,
+    int? categoryId,
+  }) async {
+    final api = await ApiClient.create(
+      tenantSlug: tenantSlug,
+      authToken: authToken,
+    );
+
+    await api.dio.patch(
+      Endpoints.tenantVariantAvailabilityBulk,
+      data: {
+        'is_available': isAvailable,
+        if (productId != null) 'product_id': productId,
+        if (categoryId != null) 'category_id': categoryId,
+      },
     );
   }
 
@@ -81,6 +116,7 @@ class TenantProductApi {
 
 class TenantProductResponse {
   final List<TenantProductCategoryGroup> groups;
+  final List<TenantProductFilterCategory> categories;
   final int currentPage;
   final int perPage;
   final int total;
@@ -89,6 +125,7 @@ class TenantProductResponse {
 
   const TenantProductResponse({
     required this.groups,
+    required this.categories,
     required this.currentPage,
     required this.perPage,
     required this.total,

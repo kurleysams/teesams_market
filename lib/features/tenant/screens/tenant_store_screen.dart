@@ -7,6 +7,10 @@ import '../state/tenant_mode_provider.dart';
 import '../state/tenant_product_provider.dart';
 import '../state/tenant_provider.dart';
 import '../state/tenant_store_provider.dart';
+import '../widgets/tenant_category_group_card.dart';
+import '../widgets/tenant_store_filters.dart';
+import '../widgets/tenant_store_status_card.dart';
+import '../widgets/tenant_store_summary_bar.dart';
 
 class TenantStoreScreen extends StatefulWidget {
   const TenantStoreScreen({super.key});
@@ -18,6 +22,9 @@ class TenantStoreScreen extends StatefulWidget {
 class _TenantStoreScreenState extends State<TenantStoreScreen> {
   final TextEditingController _searchController = TextEditingController();
   bool _didLoad = false;
+
+  final Set<int> _expandedCategoryIds = <int>{};
+  final Set<int> _expandedProductIds = <int>{};
 
   @override
   void dispose() {
@@ -37,9 +44,76 @@ class _TenantStoreScreenState extends State<TenantStoreScreen> {
     });
   }
 
+  void _syncExpandedState(List<TenantProductCategoryGroup> groups) {
+    final validCategoryIds = groups.map((g) => g.category.id).toSet();
+    final validProductIds = groups
+        .expand((g) => g.products.map((p) => p.id))
+        .toSet();
+
+    _expandedCategoryIds.removeWhere((id) => !validCategoryIds.contains(id));
+    _expandedProductIds.removeWhere((id) => !validProductIds.contains(id));
+
+    final hasSearch = _searchController.text.trim().isNotEmpty;
+    if (hasSearch) {
+      _expandedCategoryIds.addAll(validCategoryIds);
+      _expandedProductIds.addAll(validProductIds);
+    }
+  }
+
+  void _expandAll(List<TenantProductCategoryGroup> groups) {
+    setState(() {
+      _expandedCategoryIds
+        ..clear()
+        ..addAll(groups.map((g) => g.category.id));
+      _expandedProductIds
+        ..clear()
+        ..addAll(groups.expand((g) => g.products.map((p) => p.id)));
+    });
+  }
+
+  void _collapseAll() {
+    setState(() {
+      _expandedCategoryIds.clear();
+      _expandedProductIds.clear();
+    });
+  }
+
+  void _toggleCategoryExpanded(int categoryId) {
+    setState(() {
+      if (_expandedCategoryIds.contains(categoryId)) {
+        _expandedCategoryIds.remove(categoryId);
+      } else {
+        _expandedCategoryIds.add(categoryId);
+      }
+    });
+  }
+
+  void _toggleProductExpanded(int productId) {
+    setState(() {
+      if (_expandedProductIds.contains(productId)) {
+        _expandedProductIds.remove(productId);
+      } else {
+        _expandedProductIds.add(productId);
+      }
+    });
+  }
+
+  void _showErrorSnack(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  void _showSuccessSnack(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
   Future<void> _loadAll() async {
     final tenantSlug = context.read<TenantProvider>().tenant?.slug ?? '';
     final auth = context.read<AuthProvider>();
+    final productProvider = context.read<TenantProductProvider>();
 
     if (tenantSlug.isEmpty || auth.token == null) return;
 
@@ -48,11 +122,51 @@ class _TenantStoreScreenState extends State<TenantStoreScreen> {
         tenantSlug: tenantSlug,
         authToken: auth.token!,
       ),
-      context.read<TenantProductProvider>().loadProducts(
+      productProvider.loadProducts(
         tenantSlug: tenantSlug,
         authToken: auth.token!,
       ),
     ]);
+
+    if (!mounted) return;
+    setState(() {
+      _syncExpandedState(productProvider.groups);
+    });
+  }
+
+  Future<bool> _confirmBulkAction({
+    required String title,
+    required String message,
+    required bool isDestructive,
+    required String confirmLabel,
+  }) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(title),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: isDestructive
+                  ? FilledButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      foregroundColor: Colors.white,
+                    )
+                  : null,
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(confirmLabel),
+            ),
+          ],
+        );
+      },
+    );
+
+    return confirmed == true;
   }
 
   Future<void> _toggleStore(bool value) async {
@@ -61,9 +175,10 @@ class _TenantStoreScreenState extends State<TenantStoreScreen> {
 
     if (tenantSlug.isEmpty || auth.token == null) return;
 
-    final provider = context.read<TenantStoreProvider>();
+    final storeProvider = context.read<TenantStoreProvider>();
+    final productProvider = context.read<TenantProductProvider>();
 
-    final ok = await provider.updateStatus(
+    final ok = await storeProvider.updateStatus(
       tenantSlug: tenantSlug,
       authToken: auth.token!,
       isOpen: value,
@@ -71,18 +186,39 @@ class _TenantStoreScreenState extends State<TenantStoreScreen> {
 
     if (!mounted) return;
 
-    if (!ok && (provider.error ?? '').isNotEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(provider.error!)));
+    if (!ok) {
+      _showErrorSnack(
+        (storeProvider.error ?? '').trim().isNotEmpty
+            ? storeProvider.error!
+            : 'Unable to update store status',
+      );
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(value ? 'Store is now open' : 'Store is now closed'),
+    await Future.wait([
+      storeProvider.loadStore(tenantSlug: tenantSlug, authToken: auth.token!),
+      productProvider.loadProducts(
+        tenantSlug: tenantSlug,
+        authToken: auth.token!,
+        categoryId: productProvider.selectedCategoryId,
+        search: productProvider.search,
       ),
-    );
+    ]);
+
+    if (!mounted) return;
+
+    if ((storeProvider.error ?? '').trim().isNotEmpty ||
+        (productProvider.error ?? '').trim().isNotEmpty) {
+      _showErrorSnack(
+        (storeProvider.error ??
+                productProvider.error ??
+                'Unable to refresh store')
+            .toString(),
+      );
+      return;
+    }
+
+    _showSuccessSnack(value ? 'Store is now open' : 'Store is now closed');
   }
 
   Future<void> _toggleVariant(int variantId, bool value) async {
@@ -103,42 +239,165 @@ class _TenantStoreScreenState extends State<TenantStoreScreen> {
     if (!mounted) return;
 
     if (!ok && (provider.error ?? '').isNotEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(provider.error!)));
+      _showErrorSnack(provider.error!);
+    }
+  }
+
+  Future<void> _bulkToggleProduct(
+    TenantProductAvailabilityGroup product,
+    bool isAvailable,
+  ) async {
+    final confirmed = await _confirmBulkAction(
+      title: isAvailable ? 'Enable all variants?' : 'Disable all variants?',
+      message: isAvailable
+          ? 'This will mark all variants in "${product.name}" as available.'
+          : 'This will mark all variants in "${product.name}" as unavailable.',
+      isDestructive: !isAvailable,
+      confirmLabel: isAvailable ? 'Enable All' : 'Disable All',
+    );
+
+    if (!confirmed || !mounted) return;
+
+    final tenantSlug = context.read<TenantProvider>().tenant?.slug ?? '';
+    final auth = context.read<AuthProvider>();
+    final provider = context.read<TenantProductProvider>();
+
+    if (tenantSlug.isEmpty || auth.token == null) return;
+
+    final ok = await provider.bulkUpdateProductAvailability(
+      tenantSlug: tenantSlug,
+      authToken: auth.token!,
+      productId: product.id,
+      isAvailable: isAvailable,
+    );
+
+    if (!mounted) return;
+
+    if (!ok && (provider.error ?? '').isNotEmpty) {
+      _showErrorSnack(provider.error!);
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(value ? 'Variant available' : 'Variant unavailable'),
-      ),
+    setState(() {
+      _expandedProductIds.add(product.id);
+      _syncExpandedState(provider.groups);
+    });
+
+    _showSuccessSnack(
+      isAvailable
+          ? 'All variants in product enabled'
+          : 'All variants in product disabled',
+    );
+  }
+
+  Future<void> _bulkToggleCategory(
+    TenantProductCategory category,
+    bool isAvailable,
+  ) async {
+    final confirmed = await _confirmBulkAction(
+      title: isAvailable ? 'Enable category?' : 'Disable category?',
+      message: isAvailable
+          ? 'This will mark all variants in "${category.name}" as available.'
+          : 'This will mark all variants in "${category.name}" as unavailable.',
+      isDestructive: !isAvailable,
+      confirmLabel: isAvailable ? 'Enable Category' : 'Disable Category',
+    );
+
+    if (!confirmed || !mounted) return;
+
+    final tenantSlug = context.read<TenantProvider>().tenant?.slug ?? '';
+    final auth = context.read<AuthProvider>();
+    final provider = context.read<TenantProductProvider>();
+
+    if (tenantSlug.isEmpty || auth.token == null) return;
+
+    final ok = await provider.bulkUpdateCategoryAvailability(
+      tenantSlug: tenantSlug,
+      authToken: auth.token!,
+      categoryId: category.id,
+      isAvailable: isAvailable,
+    );
+
+    if (!mounted) return;
+
+    if (!ok && (provider.error ?? '').isNotEmpty) {
+      _showErrorSnack(provider.error!);
+      return;
+    }
+
+    setState(() {
+      _expandedCategoryIds.add(category.id);
+      _syncExpandedState(provider.groups);
+    });
+
+    _showSuccessSnack(
+      isAvailable
+          ? 'All variants in category enabled'
+          : 'All variants in category disabled',
     );
   }
 
   Future<void> _searchProducts() async {
     final tenantSlug = context.read<TenantProvider>().tenant?.slug ?? '';
     final auth = context.read<AuthProvider>();
+    final productProvider = context.read<TenantProductProvider>();
+    final selectedCategoryId = productProvider.selectedCategoryId;
 
     if (tenantSlug.isEmpty || auth.token == null) return;
 
-    await context.read<TenantProductProvider>().loadProducts(
+    await productProvider.loadProducts(
       tenantSlug: tenantSlug,
       authToken: auth.token!,
       search: _searchController.text.trim(),
+      categoryId: selectedCategoryId,
     );
+
+    if (!mounted) return;
+    setState(() {
+      _syncExpandedState(productProvider.groups);
+    });
   }
 
   Future<void> _loadMore() async {
     final tenantSlug = context.read<TenantProvider>().tenant?.slug ?? '';
     final auth = context.read<AuthProvider>();
+    final productProvider = context.read<TenantProductProvider>();
+    final selectedCategoryId = productProvider.selectedCategoryId;
 
     if (tenantSlug.isEmpty || auth.token == null) return;
 
-    await context.read<TenantProductProvider>().loadMore(
+    await productProvider.loadMore(
       tenantSlug: tenantSlug,
       authToken: auth.token!,
+      categoryId: selectedCategoryId,
     );
+
+    if (!mounted) return;
+    setState(() {
+      _syncExpandedState(productProvider.groups);
+    });
+  }
+
+  Future<void> _selectCategory(int? categoryId) async {
+    final tenantSlug = context.read<TenantProvider>().tenant?.slug ?? '';
+    final auth = context.read<AuthProvider>();
+    final productProvider = context.read<TenantProductProvider>();
+
+    if (tenantSlug.isEmpty || auth.token == null) return;
+
+    productProvider.setSelectedCategory(categoryId);
+
+    await productProvider.loadProducts(
+      tenantSlug: tenantSlug,
+      authToken: auth.token!,
+      search: _searchController.text.trim(),
+      categoryId: categoryId,
+    );
+
+    if (!mounted) return;
+    setState(() {
+      _syncExpandedState(productProvider.groups);
+    });
   }
 
   @override
@@ -147,6 +406,7 @@ class _TenantStoreScreenState extends State<TenantStoreScreen> {
     final productProvider = context.watch<TenantProductProvider>();
     final tenantMode = context.watch<TenantModeProvider>();
     final store = storeProvider.store;
+    final groups = productProvider.groups;
 
     if (storeProvider.loading && store == null) {
       return const Center(child: CircularProgressIndicator());
@@ -157,66 +417,12 @@ class _TenantStoreScreenState extends State<TenantStoreScreen> {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Store Status',
-                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
-                  ),
-                  const SizedBox(height: 12),
-                  if (store == null)
-                    const Text('No store data available')
-                  else ...[
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            store.isOpen ? 'Store is Open' : 'Store is Closed',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                        Switch(
-                          value: store.isOpen,
-                          onChanged:
-                              (!tenantMode.canManageStoreStatus ||
-                                  storeProvider.saving)
-                              ? null
-                              : _toggleStore,
-                        ),
-                      ],
-                    ),
-                    if (!tenantMode.canManageStoreStatus)
-                      const Padding(
-                        padding: EdgeInsets.only(top: 8),
-                        child: Text(
-                          'You do not have permission to change store status.',
-                          style: TextStyle(
-                            color: Color(0xFF6B7280),
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    const SizedBox(height: 8),
-                    Text('Timezone: ${store.timezone}'),
-                    Text('Currency: ${store.currency}'),
-                  ],
-                  if ((storeProvider.error ?? '').isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      storeProvider.error!,
-                      style: const TextStyle(color: Colors.red),
-                    ),
-                  ],
-                ],
-              ),
-            ),
+          TenantStoreStatusCard(
+            store: store,
+            saving: storeProvider.saving,
+            canManageStoreStatus: tenantMode.canManageStoreStatus,
+            error: storeProvider.error,
+            onToggle: _toggleStore,
           ),
           const SizedBox(height: 16),
           Card(
@@ -226,31 +432,48 @@ class _TenantStoreScreenState extends State<TenantStoreScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Variant Availability',
+                    'Availability by Category',
                     style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
                   ),
+                  const SizedBox(height: 8),
+                  TenantStoreSummaryBar(
+                    categoryCount: productProvider.categoryCount,
+                    productCount: productProvider.productCount,
+                    variantCount: productProvider.variantCount,
+                    totalCount: productProvider.total,
+                  ),
                   const SizedBox(height: 12),
-                  TextField(
+                  TenantStoreFilters(
                     controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText: 'Search products or variants',
-                      prefixIcon: const Icon(Icons.search),
-                      suffixIcon: _searchController.text.isEmpty
-                          ? null
-                          : IconButton(
-                              onPressed: () async {
-                                _searchController.clear();
-                                await _searchProducts();
-                                if (mounted) setState(() {});
-                              },
-                              icon: const Icon(Icons.close),
-                            ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    onChanged: (_) => setState(() {}),
-                    onSubmitted: (_) => _searchProducts(),
+                    categories: productProvider.categories,
+                    selectedCategoryId: productProvider.selectedCategoryId,
+                    hasGroups: groups.isNotEmpty,
+                    onChanged: (value) {
+                      setState(() {});
+                      final tenantSlug =
+                          context.read<TenantProvider>().tenant?.slug ?? '';
+                      final auth = context.read<AuthProvider>();
+
+                      if (tenantSlug.isEmpty || auth.token == null) return;
+
+                      context.read<TenantProductProvider>().debounceSearch(
+                        tenantSlug: tenantSlug,
+                        authToken: auth.token!,
+                        search: value,
+                        categoryId: context
+                            .read<TenantProductProvider>()
+                            .selectedCategoryId,
+                      );
+                    },
+                    onSubmitted: _searchProducts,
+                    onClear: () async {
+                      _searchController.clear();
+                      await _searchProducts();
+                      if (mounted) setState(() {});
+                    },
+                    onSelectCategory: _selectCategory,
+                    onExpandAll: () => _expandAll(groups),
+                    onCollapseAll: _collapseAll,
                   ),
                   const SizedBox(height: 12),
                   if (productProvider.loading)
@@ -266,20 +489,35 @@ class _TenantStoreScreenState extends State<TenantStoreScreen> {
                         style: const TextStyle(color: Colors.red),
                       ),
                     )
-                  else if (productProvider.groups.isEmpty)
+                  else if (groups.isEmpty)
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 16),
                       child: Text('No products found'),
                     )
                   else ...[
                     Column(
-                      children: productProvider.groups.map((categoryGroup) {
-                        return _CategoryGroupCard(
+                      children: groups.map((categoryGroup) {
+                        return TenantCategoryGroupCard(
+                          key: ValueKey(
+                            'category-${categoryGroup.category.id}',
+                          ),
                           group: categoryGroup,
+                          isExpanded: _expandedCategoryIds.contains(
+                            categoryGroup.category.id,
+                          ),
+                          expandedProductIds: _expandedProductIds,
+                          onToggleCategoryExpanded: () =>
+                              _toggleCategoryExpanded(
+                                categoryGroup.category.id,
+                              ),
+                          onToggleProductExpanded: _toggleProductExpanded,
                           isUpdating: productProvider.isUpdating,
                           onToggle: _toggleVariant,
+                          onBulkCategoryToggle: _bulkToggleCategory,
+                          onBulkProductToggle: _bulkToggleProduct,
                           canManageAvailability:
                               tenantMode.canManageProductAvailability,
+                          bulkUpdating: productProvider.bulkUpdating,
                         );
                       }).toList(),
                     ),
@@ -310,135 +548,6 @@ class _TenantStoreScreenState extends State<TenantStoreScreen> {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _CategoryGroupCard extends StatelessWidget {
-  final TenantProductCategoryGroup group;
-  final bool Function(int variantId) isUpdating;
-  final Future<void> Function(int variantId, bool value) onToggle;
-  final bool canManageAvailability;
-
-  const _CategoryGroupCard({
-    required this.group,
-    required this.isUpdating,
-    required this.onToggle,
-    required this.canManageAvailability,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              group.category.name,
-              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
-            ),
-            const SizedBox(height: 10),
-            ...group.products.map((product) {
-              return _ProductGroupCard(
-                group: product,
-                isUpdating: isUpdating,
-                onToggle: onToggle,
-                canManageAvailability: canManageAvailability,
-              );
-            }),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ProductGroupCard extends StatelessWidget {
-  final TenantProductAvailabilityGroup group;
-  final bool Function(int variantId) isUpdating;
-  final Future<void> Function(int variantId, bool value) onToggle;
-  final bool canManageAvailability;
-
-  const _ProductGroupCard({
-    required this.group,
-    required this.isUpdating,
-    required this.onToggle,
-    required this.canManageAvailability,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      color: const Color(0xFFF9FAFB),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              group.name,
-              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              group.isActive ? 'Product active' : 'Product inactive',
-              style: TextStyle(
-                color: group.isActive ? Colors.green : Colors.red,
-                fontSize: 12,
-              ),
-            ),
-            const SizedBox(height: 10),
-            ...group.variants.map((variant) {
-              final subtitleParts = <String>[];
-
-              if (variant.variantName.isNotEmpty) {
-                subtitleParts.add(variant.variantName);
-              }
-              if (variant.sku.isNotEmpty) {
-                subtitleParts.add('SKU: ${variant.sku}');
-              }
-              if (variant.unitQty > 0 && variant.unitType.isNotEmpty) {
-                subtitleParts.add('${variant.unitQty} ${variant.unitType}');
-              }
-              subtitleParts.add('£${variant.price.toStringAsFixed(2)}');
-
-              if (variant.trackInventory) {
-                subtitleParts.add('Stock: ${variant.stockQty}');
-              }
-
-              if (!variant.canBeOrdered) {
-                subtitleParts.add('Not orderable');
-              }
-
-              return SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(
-                  variant.variantName.isNotEmpty
-                      ? variant.variantName
-                      : 'Default Variant',
-                ),
-                subtitle: Text(subtitleParts.join(' • ')),
-                value: variant.isAvailable,
-                onChanged: (!canManageAvailability || isUpdating(variant.id))
-                    ? null
-                    : (value) => onToggle(variant.id, value),
-              );
-            }),
-            if (!canManageAvailability)
-              const Padding(
-                padding: EdgeInsets.only(top: 8),
-                child: Text(
-                  'You do not have permission to change availability.',
-                  style: TextStyle(color: Color(0xFF6B7280), fontSize: 12),
-                ),
-              ),
-          ],
-        ),
       ),
     );
   }

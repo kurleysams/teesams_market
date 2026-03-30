@@ -1,5 +1,3 @@
-// lib/features/cart/state/cart_provider.dart
-
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -59,6 +57,14 @@ class CartProvider extends ChangeNotifier {
   }
 
   Future<void> add(Product product, Variant variant) async {
+    if (!variant.isAvailable) {
+      throw Exception('This item is unavailable');
+    }
+
+    if (!variant.canBeOrdered) {
+      throw Exception('This item is out of stock');
+    }
+
     final existing = _items.where(
       (i) => i.product.id == product.id && i.variant.id == variant.id,
     );

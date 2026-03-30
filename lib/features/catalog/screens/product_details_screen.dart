@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../shared/widgets/cart_icon_button.dart';
+
 import '../../../core/config/app_config.dart';
+import '../../../shared/widgets/cart_icon_button.dart';
 import '../../cart/state/cart_provider.dart';
 import '../models/product.dart';
 import '../models/variant.dart';
@@ -21,8 +22,15 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   @override
   void initState() {
     super.initState();
+
     if (widget.product.variants.isNotEmpty) {
-      _selectedVariant = widget.product.variants.first;
+      final firstPurchasable = widget.product.variants
+          .cast<Variant?>()
+          .firstWhere(
+            (variant) => variant?.canPurchase == true,
+            orElse: () => widget.product.variants.first,
+          );
+      _selectedVariant = firstPurchasable;
     }
   }
 
@@ -65,7 +73,34 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       stockQty: null,
       allowBackorder: true,
       inStock: true,
+      canBeOrdered: true,
     );
+  }
+
+  bool get _canAddSelectedVariant {
+    final variant = _selectedVariant;
+    if (variant == null) {
+      return widget.product.variants.isEmpty;
+    }
+    return variant.canPurchase;
+  }
+
+  String get _ctaLabel {
+    final variant = _selectedVariant;
+
+    if (variant == null) {
+      return 'Add to cart';
+    }
+
+    if (!variant.isAvailable) {
+      return 'Unavailable';
+    }
+
+    if (!variant.canBeOrdered) {
+      return 'Out of stock';
+    }
+
+    return 'Add to cart';
   }
 
   void _addToCart() {
@@ -83,17 +118,35 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       return;
     }
 
+    if (!variant.isAvailable) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('This item is unavailable')));
+      return;
+    }
+
+    if (!variant.canBeOrdered) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('This item is out of stock')),
+      );
+      return;
+    }
+
     try {
       cart.add(product, variant);
 
-      // ScaffoldMessenger.of(context,).showSnackBar(const SnackBar(content: Text('Added to cart')));
       _showAddedSheet(
         productName: product.name,
         variantLabel: variant.name.trim().isNotEmpty ? variant.name : 'Default',
       );
-    } catch (_) {
+    } catch (e) {
+      final message = e.toString().replaceFirst('Exception: ', '');
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Unable to add item to cart')),
+        SnackBar(
+          content: Text(
+            message.isEmpty ? 'Unable to add item to cart' : message,
+          ),
+        ),
       );
     }
   }
@@ -149,6 +202,25 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                       color: Color(0xFF111827),
                     ),
                   ),
+                  if (_selectedVariant != null &&
+                      !_selectedVariant!.isAvailable) ...[
+                    const SizedBox(height: 10),
+                    const _StatusNotice(
+                      icon: Icons.block_outlined,
+                      text: 'This option is currently unavailable.',
+                      color: Color(0xFFB91C1C),
+                      background: Color(0xFFFEECEC),
+                    ),
+                  ] else if (_selectedVariant != null &&
+                      !_selectedVariant!.canBeOrdered) ...[
+                    const SizedBox(height: 10),
+                    const _StatusNotice(
+                      icon: Icons.inventory_2_outlined,
+                      text: 'This option is currently out of stock.',
+                      color: Color(0xFF92400E),
+                      background: Color(0xFFFFF7E6),
+                    ),
+                  ],
                   const SizedBox(height: 14),
                   if (product.description?.trim().isNotEmpty == true)
                     _SectionCard(
@@ -253,18 +325,20 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                 child: SizedBox(
                   height: 48,
                   child: ElevatedButton(
-                    onPressed: _addToCart,
+                    onPressed: _canAddSelectedVariant ? _addToCart : null,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF1D4ED8),
                       foregroundColor: Colors.white,
                       elevation: 0,
+                      disabledBackgroundColor: const Color(0xFFE5E7EB),
+                      disabledForegroundColor: const Color(0xFF6B7280),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14),
                       ),
                     ),
-                    child: const Text(
-                      'Add to cart',
-                      style: TextStyle(
+                    child: Text(
+                      _ctaLabel,
+                      style: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
                       ),
@@ -423,6 +497,48 @@ class _SectionCard extends StatelessWidget {
   }
 }
 
+class _StatusNotice extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  final Color color;
+  final Color background;
+
+  const _StatusNotice({
+    required this.icon,
+    required this.text,
+    required this.color,
+    required this.background,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                color: color,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _VariantTile extends StatelessWidget {
   final Variant variant;
   final bool selected;
@@ -449,51 +565,83 @@ class _VariantTile extends StatelessWidget {
     return 'Option';
   }
 
+  String? _availabilityLabel() {
+    if (!variant.isAvailable) return 'Unavailable';
+    if (!variant.canBeOrdered) return 'Out of stock';
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(16),
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: selected ? const Color(0xFFEFF6FF) : Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: selected ? const Color(0xFF3B82F6) : const Color(0xFFE5E7EB),
-            width: selected ? 1.4 : 1.0,
-          ),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              selected ? Icons.radio_button_checked : Icons.radio_button_off,
+    final canPurchase = variant.canPurchase;
+    final availabilityLabel = _availabilityLabel();
+
+    return Opacity(
+      opacity: canPurchase ? 1 : 0.62,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: selected ? const Color(0xFFEFF6FF) : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
               color: selected
-                  ? const Color(0xFF1D4ED8)
-                  : const Color(0xFF9CA3AF),
-              size: 20,
+                  ? const Color(0xFF3B82F6)
+                  : const Color(0xFFE5E7EB),
+              width: selected ? 1.4 : 1.0,
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                _variantTitle(),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                selected ? Icons.radio_button_checked : Icons.radio_button_off,
+                color: selected
+                    ? const Color(0xFF1D4ED8)
+                    : const Color(0xFF9CA3AF),
+                size: 20,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _variantTitle(),
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF111827),
+                      ),
+                    ),
+                    if (availabilityLabel != null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        availabilityLabel,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: !variant.isAvailable
+                              ? const Color(0xFFB91C1C)
+                              : const Color(0xFF92400E),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              Text(
+                '£${variant.priceUsed.toStringAsFixed(2)}',
                 style: const TextStyle(
                   fontSize: 15,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w800,
                   color: Color(0xFF111827),
                 ),
               ),
-            ),
-            Text(
-              '£${variant.priceUsed.toStringAsFixed(2)}',
-              style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w800,
-                color: Color(0xFF111827),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

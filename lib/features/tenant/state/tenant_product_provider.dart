@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
@@ -9,8 +11,13 @@ class TenantProductProvider extends ChangeNotifier {
 
   bool _loading = false;
   bool _loadingMore = false;
+  bool _bulkUpdating = false;
   final Set<int> _updatingIds = {};
   String? _error;
+
+  Timer? _searchDebounce;
+  List<TenantProductFilterCategory> _categories = [];
+  int? _selectedCategoryId;
 
   List<TenantProductCategoryGroup> _groups = [];
   String _search = '';
@@ -22,11 +29,14 @@ class TenantProductProvider extends ChangeNotifier {
 
   bool get loading => _loading;
   bool get loadingMore => _loadingMore;
+  bool get bulkUpdating => _bulkUpdating;
   String? get error => _error;
-  List<TenantProductCategoryGroup> get groups => _groups;
 
-  // Backward-friendly alias if you referenced products in UI
+  List<TenantProductCategoryGroup> get groups => _groups;
   List<TenantProductCategoryGroup> get products => _groups;
+
+  List<TenantProductFilterCategory> get categories => _categories;
+  int? get selectedCategoryId => _selectedCategoryId;
 
   String get search => _search;
   int get currentPage => _currentPage;
@@ -34,6 +44,21 @@ class TenantProductProvider extends ChangeNotifier {
   int get perPage => _perPage;
   int get total => _total;
   bool get hasMore => _hasMore;
+
+  int get categoryCount => _groups.length;
+
+  int get productCount =>
+      _groups.fold(0, (sum, group) => sum + group.products.length);
+
+  int get variantCount => _groups.fold(
+    0,
+    (sum, group) =>
+        sum +
+        group.products.fold(
+          0,
+          (productSum, product) => productSum + product.variants.length,
+        ),
+  );
 
   bool isUpdating(int variantId) => _updatingIds.contains(variantId);
 
@@ -51,6 +76,7 @@ class TenantProductProvider extends ChangeNotifier {
       _search = search;
     }
 
+    _selectedCategoryId = categoryId;
     notifyListeners();
 
     try {
@@ -64,6 +90,7 @@ class TenantProductProvider extends ChangeNotifier {
       );
 
       _groups = response.groups;
+      _categories = response.categories;
       _currentPage = response.currentPage;
       _lastPage = response.lastPage;
       _perPage = response.perPage;
@@ -104,10 +131,11 @@ class TenantProductProvider extends ChangeNotifier {
         search: _search,
         page: nextPage,
         perPage: _perPage,
-        categoryId: categoryId,
+        categoryId: categoryId ?? _selectedCategoryId,
       );
 
       _groups = _mergeGroups(_groups, response.groups);
+      _categories = response.categories;
       _currentPage = response.currentPage;
       _lastPage = response.lastPage;
       _perPage = response.perPage;
@@ -136,6 +164,13 @@ class TenantProductProvider extends ChangeNotifier {
   }) async {
     _updatingIds.add(variantId);
     _error = null;
+
+    final previousGroups = _groups;
+    _groups = _applyOptimisticVariantUpdate(
+      groups: _groups,
+      variantId: variantId,
+      isAvailable: isAvailable,
+    );
     notifyListeners();
 
     try {
@@ -164,6 +199,7 @@ class TenantProductProvider extends ChangeNotifier {
 
       return true;
     } on DioException catch (e) {
+      _groups = previousGroups;
       final data = e.response?.data;
       if (data is Map && data['message'] != null) {
         _error = data['message'].toString();
@@ -172,6 +208,7 @@ class TenantProductProvider extends ChangeNotifier {
       }
       return false;
     } catch (e) {
+      _groups = previousGroups;
       _error = e.toString().replaceFirst('Exception: ', '');
       return false;
     } finally {
@@ -180,11 +217,143 @@ class TenantProductProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> bulkUpdateProductAvailability({
+    required String tenantSlug,
+    required String authToken,
+    required int productId,
+    required bool isAvailable,
+  }) async {
+    _bulkUpdating = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      await _api.bulkUpdateAvailability(
+        tenantSlug: tenantSlug,
+        authToken: authToken,
+        productId: productId,
+        isAvailable: isAvailable,
+      );
+
+      await loadProducts(
+        tenantSlug: tenantSlug,
+        authToken: authToken,
+        search: _search,
+        categoryId: _selectedCategoryId,
+      );
+
+      return true;
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      if (data is Map && data['message'] != null) {
+        _error = data['message'].toString();
+      } else {
+        _error = e.message ?? 'Unable to bulk update product';
+      }
+      return false;
+    } catch (e) {
+      _error = e.toString().replaceFirst('Exception: ', '');
+      return false;
+    } finally {
+      _bulkUpdating = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> bulkUpdateCategoryAvailability({
+    required String tenantSlug,
+    required String authToken,
+    required int categoryId,
+    required bool isAvailable,
+  }) async {
+    _bulkUpdating = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      await _api.bulkUpdateAvailability(
+        tenantSlug: tenantSlug,
+        authToken: authToken,
+        categoryId: categoryId,
+        isAvailable: isAvailable,
+      );
+
+      await loadProducts(
+        tenantSlug: tenantSlug,
+        authToken: authToken,
+        search: _search,
+        categoryId: _selectedCategoryId,
+      );
+
+      return true;
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      if (data is Map && data['message'] != null) {
+        _error = data['message'].toString();
+      } else {
+        _error = e.message ?? 'Unable to bulk update category';
+      }
+      return false;
+    } catch (e) {
+      _error = e.toString().replaceFirst('Exception: ', '');
+      return false;
+    } finally {
+      _bulkUpdating = false;
+      notifyListeners();
+    }
+  }
+
+  void setSelectedCategory(int? categoryId) {
+    _selectedCategoryId = categoryId;
+    notifyListeners();
+  }
+
+  void debounceSearch({
+    required String tenantSlug,
+    required String authToken,
+    required String search,
+    int? categoryId,
+  }) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 350), () {
+      loadProducts(
+        tenantSlug: tenantSlug,
+        authToken: authToken,
+        search: search,
+        categoryId: categoryId ?? _selectedCategoryId,
+      );
+    });
+  }
+
+  List<TenantProductCategoryGroup> _applyOptimisticVariantUpdate({
+    required List<TenantProductCategoryGroup> groups,
+    required int variantId,
+    required bool isAvailable,
+  }) {
+    return groups.map((categoryGroup) {
+      final updatedProducts = categoryGroup.products.map((product) {
+        final updatedVariants = product.variants.map((variant) {
+          if (variant.id == variantId) {
+            return variant.copyWith(isAvailable: isAvailable);
+          }
+          return variant;
+        }).toList();
+
+        return product.copyWith(variants: updatedVariants);
+      }).toList();
+
+      return TenantProductCategoryGroup(
+        category: categoryGroup.category,
+        products: updatedProducts,
+      );
+    }).toList();
+  }
+
   List<TenantProductCategoryGroup> _mergeGroups(
     List<TenantProductCategoryGroup> existing,
     List<TenantProductCategoryGroup> incoming,
   ) {
-    final Map<int, TenantProductCategoryGroup> map = {
+    final map = <int, TenantProductCategoryGroup>{
       for (final group in existing) group.category.id: group,
     };
 
@@ -202,5 +371,11 @@ class TenantProductProvider extends ChangeNotifier {
     }
 
     return map.values.toList();
+  }
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    super.dispose();
   }
 }

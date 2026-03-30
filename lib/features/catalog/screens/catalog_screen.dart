@@ -7,6 +7,8 @@ import '../../auth/screens/login_screen.dart';
 import '../../auth/screens/profile_screen.dart';
 import '../../auth/state/auth_provider.dart';
 import '../../orders/screens/my_orders_screen.dart';
+import '../../tenant/screens/tenant_shell_screen.dart';
+import '../../tenant/state/tenant_mode_provider.dart';
 import '../../tenant/state/tenant_provider.dart';
 import '../state/catalog_provider.dart';
 
@@ -70,6 +72,31 @@ class _CatalogScreenState extends State<CatalogScreen> {
     ).push(MaterialPageRoute(builder: (_) => const ProfileScreen()));
   }
 
+  Future<void> _openStaffDashboard() async {
+    final auth = context.read<AuthProvider>();
+
+    if (!auth.isAuthenticated) {
+      await Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
+
+      if (!mounted) return;
+    }
+
+    final authAfter = context.read<AuthProvider>();
+    if (!authAfter.isAuthenticated) return;
+
+    final tenantMode = context.read<TenantModeProvider>();
+    await tenantMode.setSelectedMode('tenant');
+
+    if (!mounted) return;
+
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const TenantShellScreen()),
+      (route) => false,
+    );
+  }
+
   Future<void> _handleAccountAction(String value) async {
     final auth = context.read<AuthProvider>();
     final tenantSlug = context.read<TenantProvider>().tenant?.slug ?? '';
@@ -83,6 +110,9 @@ class _CatalogScreenState extends State<CatalogScreen> {
         break;
       case 'orders':
         await _openMyOrders();
+        break;
+      case 'staff_dashboard':
+        await _openStaffDashboard();
         break;
       case 'login':
         await Navigator.of(
@@ -122,15 +152,21 @@ class _CatalogScreenState extends State<CatalogScreen> {
     final catalog = context.watch<CatalogProvider>();
     final tenantProvider = context.watch<TenantProvider>();
     final auth = context.watch<AuthProvider>();
+    final tenantMode = context.watch<TenantModeProvider>();
 
-    final storeName = tenantProvider.tenant?.name?.trim().isNotEmpty == true
-        ? tenantProvider.tenant!.name.trim()
+    final tenant = tenantProvider.tenant;
+    final storeName = tenant?.name?.trim().isNotEmpty == true
+        ? tenant!.name.trim()
         : 'Store';
 
     final selectedName = catalog.selectedCategory?.name ?? 'All';
     final productCount = catalog.filteredProducts.length;
+    final bannerUrl = _normalizeUrl(tenant?.bannerUrl);
 
-    final bannerUrl = _normalizeUrl(tenantProvider.tenant?.bannerUrl);
+    final canAccessStaffDashboard =
+        auth.isAuthenticated &&
+        tenantMode.bootstrap != null &&
+        tenantMode.bootstrap!.hasTenantMode;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
@@ -153,14 +189,25 @@ class _CatalogScreenState extends State<CatalogScreen> {
             onSelected: _handleAccountAction,
             itemBuilder: (context) {
               if (auth.isAuthenticated) {
-                return const [
-                  PopupMenuItem(
+                return [
+                  const PopupMenuItem(
                     value: 'switch_store',
                     child: Text('Switch store'),
                   ),
-                  PopupMenuItem(value: 'profile', child: Text('My Profile')),
-                  PopupMenuItem(value: 'orders', child: Text('My Orders')),
-                  PopupMenuItem(value: 'logout', child: Text('Logout')),
+                  const PopupMenuItem(
+                    value: 'profile',
+                    child: Text('My Profile'),
+                  ),
+                  const PopupMenuItem(
+                    value: 'orders',
+                    child: Text('My Orders'),
+                  ),
+                  if (canAccessStaffDashboard)
+                    const PopupMenuItem(
+                      value: 'staff_dashboard',
+                      child: Text('Staff dashboard'),
+                    ),
+                  const PopupMenuItem(value: 'logout', child: Text('Logout')),
                 ];
               }
 
@@ -172,7 +219,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
                 PopupMenuItem(value: 'login', child: Text('Sign in')),
               ];
             },
-            icon: const Icon(Icons.person_outline),
+            icon: const Icon(Icons.more_vert),
           ),
           CartIconButton(onTap: () => Navigator.pushNamed(context, '/cart')),
           const SizedBox(width: 4),
@@ -202,13 +249,12 @@ class _CatalogScreenState extends State<CatalogScreen> {
                         ),
                         Padding(
                           padding: const EdgeInsets.fromLTRB(16, 6, 16, 4),
-                          child: _ActionStrip(
+                          child: _StoreInfoCard(
                             isAuthenticated: auth.isAuthenticated,
                             userEmail: auth.user?.email,
-                            onStoreTap: _openStoreSelector,
-                            onProfileTap: _openProfile,
-                            onOrdersTap: _openMyOrders,
-                            onSignInTap: () async {
+                            onSwitchStore: _openStoreSelector,
+                            onOrders: _openMyOrders,
+                            onSignIn: () async {
                               await Navigator.of(context).push(
                                 MaterialPageRoute(
                                   builder: (_) => const LoginScreen(),
@@ -428,97 +474,107 @@ class _CatalogScreenState extends State<CatalogScreen> {
                 ],
               ),
       ),
+      floatingActionButton: canAccessStaffDashboard
+          ? FloatingActionButton.extended(
+              onPressed: _openStaffDashboard,
+              backgroundColor: const Color(0xFF1D4ED8),
+              foregroundColor: Colors.white,
+              icon: const Icon(Icons.storefront_outlined),
+              label: const Text(
+                'Staff',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+            )
+          : null,
     );
   }
 }
 
-class _ActionStrip extends StatelessWidget {
+class _StoreInfoCard extends StatelessWidget {
   final bool isAuthenticated;
   final String? userEmail;
-  final VoidCallback onStoreTap;
-  final VoidCallback onProfileTap;
-  final VoidCallback onOrdersTap;
-  final VoidCallback onSignInTap;
+  final VoidCallback onSwitchStore;
+  final VoidCallback onOrders;
+  final VoidCallback onSignIn;
 
-  const _ActionStrip({
+  const _StoreInfoCard({
     required this.isAuthenticated,
     required this.userEmail,
-    required this.onStoreTap,
-    required this.onProfileTap,
-    required this.onOrdersTap,
-    required this.onSignInTap,
+    required this.onSwitchStore,
+    required this.onOrders,
+    required this.onSignIn,
   });
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final subtitle = isAuthenticated && (userEmail ?? '').trim().isNotEmpty
+        ? userEmail!.trim()
+        : 'Browse this store and switch anytime';
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (isAuthenticated && (userEmail ?? '').trim().isNotEmpty) ...[
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Text(
-              userEmail!,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: const Color(0xFF6B7280),
-              ),
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: const Color(0xFFE8F1FF),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              Icons.storefront_outlined,
+              color: Color(0xFF1D4ED8),
             ),
           ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Shopping this store',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF111827),
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Color(0xFF6B7280),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          OutlinedButton(
+            onPressed: onSwitchStore,
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(0, 40),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: const Text('Switch'),
+          ),
         ],
-        Row(
-          children: [
-            Expanded(
-              child: SizedBox(
-                height: 52,
-                child: OutlinedButton.icon(
-                  onPressed: onStoreTap,
-                  icon: const Icon(Icons.store_mall_directory_outlined),
-                  label: const Text('Store'),
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: SizedBox(
-                height: 52,
-                child: OutlinedButton.icon(
-                  onPressed: onOrdersTap,
-                  icon: const Icon(Icons.receipt_long_outlined),
-                  label: const Text('Orders'),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: SizedBox(
-                height: 52,
-                child: OutlinedButton.icon(
-                  onPressed: onProfileTap,
-                  icon: const Icon(Icons.person_outline),
-                  label: Text(isAuthenticated ? 'Profile' : 'Guest'),
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: SizedBox(
-                height: 52,
-                child: ElevatedButton.icon(
-                  onPressed: isAuthenticated ? onProfileTap : onSignInTap,
-                  icon: Icon(isAuthenticated ? Icons.person : Icons.login),
-                  label: Text(isAuthenticated ? 'Account' : 'Sign In'),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
+      ),
     );
   }
 }

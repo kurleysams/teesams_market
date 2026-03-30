@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 class Variant {
   final int id;
   final String sku;
@@ -13,6 +15,7 @@ class Variant {
   final int? stockQty;
   final bool allowBackorder;
   final bool inStock;
+  final bool canBeOrdered;
 
   const Variant({
     required this.id,
@@ -29,10 +32,25 @@ class Variant {
     required this.stockQty,
     required this.allowBackorder,
     required this.inStock,
+    required this.canBeOrdered,
   });
 
+  bool get canPurchase => isAvailable && canBeOrdered;
+
   factory Variant.fromJson(Map<String, dynamic> json) {
-    return Variant(
+    final isAvailable = _toStrictBool(json['is_available']) ?? true;
+    final trackInventory = _toStrictBool(json['track_inventory']) ?? false;
+    final stockQty = _toInt(json['stock_qty']);
+    final allowBackorder = _toStrictBool(json['allow_backorder']) ?? false;
+
+    final inStock =
+        _toStrictBool(json['in_stock']) ??
+        (!trackInventory || allowBackorder || (stockQty ?? 0) > 0);
+
+    final canBeOrdered =
+        _toStrictBool(json['can_be_ordered']) ?? (isAvailable && inStock);
+
+    final variant = Variant(
       id: _toInt(json['id']) ?? 0,
       sku: json['sku']?.toString() ?? '',
       name: json['name']?.toString() ?? '',
@@ -41,13 +59,29 @@ class Variant {
       price: _toDouble(json['price']) ?? 0,
       salePrice: _toDouble(json['sale_price']),
       priceUsed: _toDouble(json['price_used']) ?? 0,
-      hasDiscount: _toBool(json['has_discount']) ?? false,
-      isAvailable: _toBool(json['is_available']) ?? true,
-      trackInventory: _toBool(json['track_inventory']) ?? false,
-      stockQty: _toInt(json['stock_qty']),
-      allowBackorder: _toBool(json['allow_backorder']) ?? false,
-      inStock: _toBool(json['in_stock']) ?? true,
+      hasDiscount: _toStrictBool(json['has_discount']) ?? false,
+      isAvailable: isAvailable,
+      trackInventory: trackInventory,
+      stockQty: stockQty,
+      allowBackorder: allowBackorder,
+      inStock: inStock,
+      canBeOrdered: canBeOrdered,
     );
+
+    debugPrint(
+      'VARIANT PARSED -> '
+      'id=${variant.id}, '
+      'sku=${variant.sku}, '
+      'isAvailable=${variant.isAvailable}, '
+      'trackInventory=${variant.trackInventory}, '
+      'stockQty=${variant.stockQty}, '
+      'allowBackorder=${variant.allowBackorder}, '
+      'inStock=${variant.inStock}, '
+      'canBeOrdered=${variant.canBeOrdered}, '
+      'raw=${json.toString()}',
+    );
+
+    return variant;
   }
 
   Map<String, dynamic> toJson() {
@@ -66,6 +100,7 @@ class Variant {
       'stock_qty': stockQty,
       'allow_backorder': allowBackorder,
       'in_stock': inStock,
+      'can_be_ordered': canBeOrdered,
     };
   }
 
@@ -73,7 +108,7 @@ class Variant {
     if (value == null) return null;
     if (value is int) return value;
     if (value is num) return value.toInt();
-    if (value is String) return int.tryParse(value);
+    if (value is String) return int.tryParse(value.trim());
     return null;
   }
 
@@ -82,19 +117,35 @@ class Variant {
     if (value is double) return value;
     if (value is int) return value.toDouble();
     if (value is num) return value.toDouble();
-    if (value is String) return double.tryParse(value);
+    if (value is String) return double.tryParse(value.trim());
     return null;
   }
 
-  static bool? _toBool(dynamic value) {
+  static bool? _toStrictBool(dynamic value) {
     if (value == null) return null;
+
     if (value is bool) return value;
-    if (value is int) return value != 0;
+
+    if (value is int) {
+      if (value == 1) return true;
+      if (value == 0) return false;
+      return null;
+    }
+
+    if (value is num) {
+      final normalized = value.toInt();
+      if (normalized == 1) return true;
+      if (normalized == 0) return false;
+      return null;
+    }
+
     if (value is String) {
       final v = value.toLowerCase().trim();
       if (v == 'true' || v == '1') return true;
       if (v == 'false' || v == '0') return false;
+      return null;
     }
+
     return null;
   }
 }

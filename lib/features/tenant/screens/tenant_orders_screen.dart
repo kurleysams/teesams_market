@@ -153,10 +153,6 @@ class _TenantOrdersScreenState extends State<TenantOrdersScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                tenantMode.selectedStoreName ?? 'Store Orders',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
               const SizedBox(height: 12),
               TextField(
                 controller: _searchController,

@@ -127,13 +127,25 @@ class TenantVariantAvailability {
       unitQty: (json['unit_qty'] as num?)?.toDouble() ?? 0,
       price: (json['price'] as num?)?.toDouble() ?? 0,
       salePrice: (json['sale_price'] as num?)?.toDouble(),
-      isActive: json['is_active'] == true,
-      isAvailable: json['is_available'] == true,
-      trackInventory: json['track_inventory'] == true,
+      isActive: _toBool(json['is_active']) ?? false,
+      isAvailable: _toBool(json['is_available']) ?? false,
+      trackInventory: _toBool(json['track_inventory']) ?? false,
       stockQty: (json['stock_qty'] as num?)?.toInt() ?? 0,
-      allowBackorder: json['allow_backorder'] == true,
-      canBeOrdered: json['can_be_ordered'] == true,
+      allowBackorder: _toBool(json['allow_backorder']) ?? false,
+      canBeOrdered: _toBool(json['can_be_ordered']) ?? false,
     );
+  }
+
+  static bool? _toBool(dynamic value) {
+    if (value == null) return null;
+    if (value is bool) return value;
+    if (value is int) return value != 0;
+    if (value is String) {
+      final v = value.toLowerCase().trim();
+      if (v == 'true' || v == '1') return true;
+      if (v == 'false' || v == '0') return false;
+    }
+    return null;
   }
 
   TenantVariantAvailability copyWith({bool? isAvailable}) {
@@ -153,6 +165,20 @@ class TenantVariantAvailability {
       stockQty: stockQty,
       allowBackorder: allowBackorder,
       canBeOrdered: canBeOrdered,
+    );
+  }
+}
+
+class TenantProductFilterCategory {
+  final int id;
+  final String name;
+
+  const TenantProductFilterCategory({required this.id, required this.name});
+
+  factory TenantProductFilterCategory.fromJson(Map<String, dynamic> json) {
+    return TenantProductFilterCategory(
+      id: (json['id'] as num?)?.toInt() ?? 0,
+      name: json['name']?.toString() ?? '',
     );
   }
 }

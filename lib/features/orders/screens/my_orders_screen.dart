@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../auth/screens/login_screen.dart';
+import '../../auth/screens/register_screen.dart';
 import '../../auth/state/auth_provider.dart';
 import '../../tenant/state/tenant_provider.dart';
 import '../models/customer_order_summary.dart';
@@ -19,6 +20,7 @@ class MyOrdersScreen extends StatefulWidget {
 
 class _MyOrdersScreenState extends State<MyOrdersScreen> {
   Future<List<CustomerOrderSummary>>? _future;
+  bool _didInit = false;
 
   String _resolvedTenantSlug(BuildContext context) {
     if (widget.tenantSlug.trim().isNotEmpty) return widget.tenantSlug.trim();
@@ -26,29 +28,35 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
   }
 
   @override
-  void initState() {
-    super.initState();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    if (_didInit) return;
+    _didInit = true;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      _maybeLoadOrders();
+    });
+  }
 
-      final auth = context.read<AuthProvider>();
+  Future<void> _maybeLoadOrders() async {
+    final auth = context.read<AuthProvider>();
 
-      if (!auth.isAuthenticated) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const LoginScreen()),
-        );
-        return;
-      }
-
-      final tenantSlug = _resolvedTenantSlug(context);
-      if (tenantSlug.isEmpty) return;
-
+    if (!auth.isAuthenticated) {
       setState(() {
-        _future = context.read<OrderProvider>().fetchMyOrders(
-          tenantSlug: tenantSlug,
-        );
+        _future = null;
       });
+      return;
+    }
+
+    final tenantSlug = _resolvedTenantSlug(context);
+    if (tenantSlug.isEmpty) return;
+
+    setState(() {
+      _future = context.read<OrderProvider>().fetchMyOrders(
+        tenantSlug: tenantSlug,
+      );
     });
   }
 
@@ -56,9 +64,9 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
     final auth = context.read<AuthProvider>();
 
     if (!auth.isAuthenticated) {
-      Navigator.of(
-        context,
-      ).pushReplacement(MaterialPageRoute(builder: (_) => const LoginScreen()));
+      setState(() {
+        _future = null;
+      });
       return;
     }
 
@@ -76,95 +84,147 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
     await future;
   }
 
+  Future<void> _openLogin() async {
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
+
+    if (!mounted) return;
+    await _maybeLoadOrders();
+  }
+
+  Future<void> _openRegister() async {
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const RegisterScreen()));
+
+    if (!mounted) return;
+    await _maybeLoadOrders();
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final future = _future;
 
-    if (!auth.isAuthenticated) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
-
-    if (future == null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('My Orders')),
-        body: const Center(child: CircularProgressIndicator()),
-      );
-    }
-
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(title: const Text('My Orders')),
-      body: FutureBuilder<List<CustomerOrderSummary>>(
-        future: future,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const _OrdersLoadingState();
-          }
-
-          if (snapshot.hasError) {
-            return RefreshIndicator(
+      body: !auth.isAuthenticated
+          ? RefreshIndicator(
               onRefresh: _reload,
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.all(24),
                 children: [
-                  const SizedBox(height: 120),
+                  const SizedBox(height: 72),
                   _OrdersMessageCard(
-                    icon: Icons.error_outline,
-                    title: 'Unable to load orders',
-                    message: snapshot.error.toString().replaceFirst(
-                      'Exception: ',
-                      '',
+                    icon: Icons.lock_outline,
+                    title: 'Sign in to view saved orders',
+                    message:
+                        'Orders placed while signed in appear here. If you checked out as a guest, sign in or create an account with the same email used at checkout to claim your order.',
+                    child: Column(
+                      children: [
+                        const SizedBox(height: 18),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 48,
+                          child: ElevatedButton(
+                            onPressed: _openLogin,
+                            child: const Text('Sign in'),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 48,
+                          child: OutlinedButton(
+                            onPressed: _openRegister,
+                            child: const Text('Create account'),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
-            );
-          }
+            )
+          : future == null
+          ? const Center(child: CircularProgressIndicator())
+          : FutureBuilder<List<CustomerOrderSummary>>(
+              future: future,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const _OrdersLoadingState();
+                }
 
-          final orders = snapshot.data ?? [];
-
-          if (orders.isEmpty) {
-            return RefreshIndicator(
-              onRefresh: _reload,
-              child: ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(24),
-                children: const [
-                  SizedBox(height: 120),
-                  _OrdersMessageCard(
-                    icon: Icons.receipt_long_outlined,
-                    title: 'No orders yet',
-                    message: 'When you place an order, it will appear here.',
-                  ),
-                ],
-              ),
-            );
-          }
-
-          return RefreshIndicator(
-            onRefresh: _reload,
-            child: ListView.builder(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
-              itemCount: orders.length,
-              itemBuilder: (context, index) {
-                final order = orders[index];
-                final tenantSlug = _resolvedTenantSlug(context);
-
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: _OrderCard(
-                    order: order,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => OrderDetailsScreen(
-                            tenantSlug: tenantSlug,
-                            orderId: order.id,
+                if (snapshot.hasError) {
+                  return RefreshIndicator(
+                    onRefresh: _reload,
+                    child: ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.all(24),
+                      children: [
+                        const SizedBox(height: 120),
+                        _OrdersMessageCard(
+                          icon: Icons.error_outline,
+                          title: 'Unable to load orders',
+                          message: snapshot.error.toString().replaceFirst(
+                            'Exception: ',
+                            '',
                           ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                final orders = snapshot.data ?? [];
+
+                if (orders.isEmpty) {
+                  return RefreshIndicator(
+                    onRefresh: _reload,
+                    child: ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.all(24),
+                      children: const [
+                        SizedBox(height: 120),
+                        _OrdersMessageCard(
+                          icon: Icons.receipt_long_outlined,
+                          title: 'No saved orders yet',
+                          message:
+                              'Orders placed while signed in will appear here.',
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                return RefreshIndicator(
+                  onRefresh: _reload,
+                  child: ListView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+                    itemCount: orders.length,
+                    itemBuilder: (context, index) {
+                      final order = orders[index];
+                      final tenantSlug = _resolvedTenantSlug(context);
+
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: _OrderCard(
+                          order: order,
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => OrderDetailsScreen(
+                                  tenantSlug: tenantSlug,
+                                  orderId: order.id,
+                                ),
+                              ),
+                            );
+                          },
                         ),
                       );
                     },
@@ -172,9 +232,6 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                 );
               },
             ),
-          );
-        },
-      ),
     );
   }
 }
@@ -187,10 +244,16 @@ class _OrderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final status = _statusLabel(order.status);
-    final paymentStatus = order.paymentStatus == null
+    final orderStatusLabel = _statusLabel(order.status);
+    final paymentStatusRaw = order.paymentStatus?.trim();
+    final paymentStatusLabel =
+        (paymentStatusRaw == null || paymentStatusRaw.isEmpty)
         ? null
-        : _statusLabel(order.paymentStatus!);
+        : _statusLabel(paymentStatusRaw);
+
+    final showPaymentBadge =
+        paymentStatusLabel != null &&
+        paymentStatusLabel.toLowerCase() != orderStatusLabel.toLowerCase();
 
     return Material(
       color: Colors.white,
@@ -235,13 +298,13 @@ class _OrderCard extends StatelessWidget {
                 runSpacing: 8,
                 children: [
                   _StatusBadge(
-                    label: status,
+                    label: orderStatusLabel,
                     kind: _orderStatusKind(order.status),
                   ),
-                  if (paymentStatus != null)
+                  if (showPaymentBadge)
                     _StatusBadge(
-                      label: paymentStatus,
-                      kind: _paymentStatusKind(order.paymentStatus!),
+                      label: paymentStatusLabel!,
+                      kind: _paymentStatusKind(paymentStatusRaw!),
                     ),
                 ],
               ),
@@ -265,7 +328,7 @@ class _OrderCard extends StatelessWidget {
                   ),
                   if (order.total != null)
                     Text(
-                      order.total!.toStringAsFixed(2),
+                      _formatAmount(order.total!),
                       style: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
@@ -341,11 +404,13 @@ class _OrdersMessageCard extends StatelessWidget {
   final IconData icon;
   final String title;
   final String message;
+  final Widget? child;
 
   const _OrdersMessageCard({
     required this.icon,
     required this.title,
     required this.message,
+    this.child,
   });
 
   @override
@@ -376,6 +441,7 @@ class _OrdersMessageCard extends StatelessWidget {
             textAlign: TextAlign.center,
             style: const TextStyle(fontSize: 14, color: Color(0xFF6B7280)),
           ),
+          if (child != null) child!,
         ],
       ),
     );
@@ -395,13 +461,18 @@ enum _BadgeKind { success, warning, info, neutral, danger }
 
 _BadgeKind _orderStatusKind(String status) {
   switch (status.toLowerCase()) {
+    case 'completed':
     case 'delivered':
     case 'confirmed':
+    case 'paid':
       return _BadgeKind.success;
     case 'pending':
     case 'processing':
+    case 'preparing':
       return _BadgeKind.warning;
     case 'shipped':
+    case 'out_for_delivery':
+    case 'ready_for_pickup':
       return _BadgeKind.info;
     case 'cancelled':
     case 'failed':
@@ -449,4 +520,8 @@ String _friendlyDate(String? value) {
   } catch (_) {
     return value;
   }
+}
+
+String _formatAmount(double value) {
+  return value.toStringAsFixed(2);
 }

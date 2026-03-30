@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+
 import '../models/tenant_order_details.dart';
 import '../models/tenant_order_summary.dart';
 
@@ -18,6 +20,26 @@ class TenantOrderUi {
         return 'Cancel';
       default:
         return key.replaceAll('_', ' ');
+    }
+  }
+
+  static Color statusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'pending':
+        return Colors.orange;
+      case 'confirmed':
+        return Colors.blue;
+      case 'preparing':
+        return Colors.deepPurple;
+      case 'ready_for_pickup':
+      case 'out_for_delivery':
+        return Colors.teal;
+      case 'completed':
+        return Colors.green;
+      case 'cancelled':
+        return Colors.red;
+      default:
+        return const Color(0xFF6B7280);
     }
   }
 
