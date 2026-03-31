@@ -3,11 +3,12 @@ import 'package:provider/provider.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../shared/widgets/cart_icon_button.dart';
-import '../../auth/screens/login_screen.dart';
+import '../../auth/screens/customer_login_screen.dart';
 import '../../auth/screens/profile_screen.dart';
 import '../../auth/state/auth_provider.dart';
 import '../../orders/screens/my_orders_screen.dart';
 import '../../tenant/screens/tenant_shell_screen.dart';
+import '../../tenant/state/seller_auth_provider.dart';
 import '../../tenant/state/tenant_mode_provider.dart';
 import '../../tenant/state/tenant_provider.dart';
 import '../state/catalog_provider.dart';
@@ -38,7 +39,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
     if (!auth.isAuthenticated) {
       await Navigator.of(
         context,
-      ).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
+      ).push(MaterialPageRoute(builder: (_) => const CustomerLoginScreen()));
 
       if (!mounted) return;
     }
@@ -59,7 +60,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
     if (!auth.isAuthenticated) {
       await Navigator.of(
         context,
-      ).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
+      ).push(MaterialPageRoute(builder: (_) => const CustomerLoginScreen()));
 
       if (!mounted) return;
     }
@@ -78,7 +79,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
     if (!auth.isAuthenticated) {
       await Navigator.of(
         context,
-      ).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
+      ).push(MaterialPageRoute(builder: (_) => const CustomerLoginScreen()));
 
       if (!mounted) return;
     }
@@ -95,6 +96,36 @@ class _CatalogScreenState extends State<CatalogScreen> {
       MaterialPageRoute(builder: (_) => const TenantShellScreen()),
       (route) => false,
     );
+  }
+
+  Future<void> _openSellerWelcome() async {
+    await Navigator.pushNamed(context, '/seller/welcome');
+  }
+
+  Future<void> _openSellerLogin() async {
+    await Navigator.pushNamed(context, '/seller/login');
+  }
+
+  Future<void> _openSellerDashboardOrOnboarding() async {
+    final sellerAuth = context.read<SellerAuthProvider>();
+
+    if (!sellerAuth.isAuthenticated) {
+      await _openSellerLogin();
+      return;
+    }
+
+    final tenant = sellerAuth.tenant;
+    final status = tenant?['status']?.toString();
+    final isActive = tenant?['is_active'] == true;
+
+    if (isActive || status == 'active' || status == 'approved') {
+      if (!mounted) return;
+      Navigator.pushNamed(context, '/tenant-shell');
+      return;
+    }
+
+    if (!mounted) return;
+    Navigator.pushNamed(context, '/seller/onboarding');
   }
 
   Future<void> _handleAccountAction(String value) async {
@@ -114,12 +145,22 @@ class _CatalogScreenState extends State<CatalogScreen> {
       case 'staff_dashboard':
         await _openStaffDashboard();
         break;
+      case 'seller_welcome':
+        await _openSellerWelcome();
+        break;
+      case 'seller_login':
+        await _openSellerLogin();
+        break;
+      case 'seller_portal':
+        await _openSellerDashboardOrOnboarding();
+        break;
       case 'login':
         await Navigator.of(
           context,
-        ).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
+        ).push(MaterialPageRoute(builder: (_) => const CustomerLoginScreen()));
         break;
       case 'logout':
+        if (tenantSlug.isEmpty) return;
         await auth.logout(tenantSlug: tenantSlug);
         if (!mounted) return;
         ScaffoldMessenger.of(
@@ -152,6 +193,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
     final catalog = context.watch<CatalogProvider>();
     final tenantProvider = context.watch<TenantProvider>();
     final auth = context.watch<AuthProvider>();
+    final sellerAuth = context.watch<SellerAuthProvider>();
     final tenantMode = context.watch<TenantModeProvider>();
 
     final tenant = tenantProvider.tenant;
@@ -167,6 +209,18 @@ class _CatalogScreenState extends State<CatalogScreen> {
         auth.isAuthenticated &&
         tenantMode.bootstrap != null &&
         tenantMode.bootstrap!.hasTenantMode;
+
+    final hasSellerSession = sellerAuth.isAuthenticated;
+    final sellerTenant = sellerAuth.tenant;
+    final sellerStatus = sellerTenant?['status']?.toString();
+    final sellerIsActive = sellerTenant?['is_active'] == true;
+    final showSellerPortal =
+        hasSellerSession &&
+        (sellerIsActive ||
+            sellerStatus == 'approved' ||
+            sellerStatus == 'active' ||
+            sellerStatus == 'pending_review' ||
+            sellerStatus == 'onboarding_in_progress');
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
@@ -188,12 +242,15 @@ class _CatalogScreenState extends State<CatalogScreen> {
           PopupMenuButton<String>(
             onSelected: _handleAccountAction,
             itemBuilder: (context) {
+              final items = <PopupMenuEntry<String>>[
+                const PopupMenuItem(
+                  value: 'switch_store',
+                  child: Text('Switch store'),
+                ),
+              ];
+
               if (auth.isAuthenticated) {
-                return [
-                  const PopupMenuItem(
-                    value: 'switch_store',
-                    child: Text('Switch store'),
-                  ),
+                items.addAll([
                   const PopupMenuItem(
                     value: 'profile',
                     child: Text('My Profile'),
@@ -202,22 +259,52 @@ class _CatalogScreenState extends State<CatalogScreen> {
                     value: 'orders',
                     child: Text('My Orders'),
                   ),
-                  if (canAccessStaffDashboard)
+                ]);
+
+                if (canAccessStaffDashboard) {
+                  items.add(
                     const PopupMenuItem(
                       value: 'staff_dashboard',
                       child: Text('Staff dashboard'),
                     ),
-                  const PopupMenuItem(value: 'logout', child: Text('Logout')),
-                ];
+                  );
+                }
+              } else {
+                items.add(
+                  const PopupMenuItem(value: 'login', child: Text('Sign in')),
+                );
               }
 
-              return const [
-                PopupMenuItem(
-                  value: 'switch_store',
-                  child: Text('Switch store'),
-                ),
-                PopupMenuItem(value: 'login', child: Text('Sign in')),
-              ];
+              items.add(const PopupMenuDivider());
+
+              if (showSellerPortal) {
+                items.add(
+                  const PopupMenuItem(
+                    value: 'seller_portal',
+                    child: Text('Seller portal'),
+                  ),
+                );
+              } else {
+                items.addAll([
+                  const PopupMenuItem(
+                    value: 'seller_welcome',
+                    child: Text('Sell on Teesams'),
+                  ),
+                  const PopupMenuItem(
+                    value: 'seller_login',
+                    child: Text('Seller sign in'),
+                  ),
+                ]);
+              }
+
+              if (auth.isAuthenticated) {
+                items.add(const PopupMenuDivider());
+                items.add(
+                  const PopupMenuItem(value: 'logout', child: Text('Logout')),
+                );
+              }
+
+              return items;
             },
             icon: const Icon(Icons.more_vert),
           ),
@@ -249,18 +336,32 @@ class _CatalogScreenState extends State<CatalogScreen> {
                         ),
                         Padding(
                           padding: const EdgeInsets.fromLTRB(16, 6, 16, 4),
-                          child: _StoreInfoCard(
+                          child: _StoreContextCard(
                             isAuthenticated: auth.isAuthenticated,
                             userEmail: auth.user?.email,
+                            canAccessStaffDashboard: canAccessStaffDashboard,
                             onSwitchStore: _openStoreSelector,
+                            onProfile: _openProfile,
                             onOrders: _openMyOrders,
+                            onStaff: _openStaffDashboard,
                             onSignIn: () async {
                               await Navigator.of(context).push(
                                 MaterialPageRoute(
-                                  builder: (_) => const LoginScreen(),
+                                  builder: (_) => const CustomerLoginScreen(),
                                 ),
                               );
                             },
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                          child: _SellerEntryCard(
+                            hasSellerSession: hasSellerSession,
+                            sellerIsActive: sellerIsActive,
+                            sellerStatus: sellerStatus,
+                            onStartSelling: _openSellerWelcome,
+                            onSellerSignIn: _openSellerLogin,
+                            onSellerPortal: _openSellerDashboardOrOnboarding,
                           ),
                         ),
                       ],
@@ -490,91 +591,307 @@ class _CatalogScreenState extends State<CatalogScreen> {
   }
 }
 
-class _StoreInfoCard extends StatelessWidget {
+class _StoreContextCard extends StatelessWidget {
   final bool isAuthenticated;
   final String? userEmail;
+  final bool canAccessStaffDashboard;
   final VoidCallback onSwitchStore;
+  final VoidCallback onProfile;
   final VoidCallback onOrders;
+  final VoidCallback onStaff;
   final VoidCallback onSignIn;
 
-  const _StoreInfoCard({
+  const _StoreContextCard({
     required this.isAuthenticated,
     required this.userEmail,
+    required this.canAccessStaffDashboard,
     required this.onSwitchStore,
+    required this.onProfile,
     required this.onOrders,
+    required this.onStaff,
     required this.onSignIn,
   });
 
   @override
   Widget build(BuildContext context) {
-    final subtitle = isAuthenticated && (userEmail ?? '').trim().isNotEmpty
-        ? userEmail!.trim()
-        : 'Browse this store and switch anytime';
+    final displayEmail = (userEmail ?? '').trim();
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(22),
         border: Border.all(color: const Color(0xFFE5E7EB)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: const Color(0xFFE8F1FF),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(
-              Icons.storefront_outlined,
-              color: Color(0xFF1D4ED8),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Shopping this store',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF111827),
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  subtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: Color(0xFF6B7280),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          OutlinedButton(
-            onPressed: onSwitchStore,
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size(0, 40),
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            child: const Text('Switch'),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x08000000),
+            blurRadius: 8,
+            offset: Offset(0, 3),
           ),
         ],
       ),
+      child: isAuthenticated
+          ? _SignedInStoreBar(
+              email: displayEmail,
+              canAccessStaffDashboard: canAccessStaffDashboard,
+              onSwitchStore: onSwitchStore,
+              onProfile: onProfile,
+              onOrders: onOrders,
+              onStaff: onStaff,
+            )
+          : _GuestStoreBar(onSwitchStore: onSwitchStore, onSignIn: onSignIn),
+    );
+  }
+}
+
+class _SellerEntryCard extends StatelessWidget {
+  final bool hasSellerSession;
+  final bool sellerIsActive;
+  final String? sellerStatus;
+  final VoidCallback onStartSelling;
+  final VoidCallback onSellerSignIn;
+  final VoidCallback onSellerPortal;
+
+  const _SellerEntryCard({
+    required this.hasSellerSession,
+    required this.sellerIsActive,
+    required this.sellerStatus,
+    required this.onStartSelling,
+    required this.onSellerSignIn,
+    required this.onSellerPortal,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final statusText = _sellerStatusText(
+      sellerIsActive: sellerIsActive,
+      sellerStatus: sellerStatus,
+    );
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF6FF),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFBFDBFE)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x08000000),
+            blurRadius: 8,
+            offset: Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.storefront_outlined, color: Color(0xFF1D4ED8)),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Own a food business?',
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF1E3A8A),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            hasSellerSession
+                ? statusText
+                : 'Open your store on Teesams, complete onboarding in the app, and submit for review.',
+            style: const TextStyle(
+              fontSize: 14,
+              height: 1.45,
+              color: Color(0xFF1E40AF),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: hasSellerSession
+                ? [
+                    FilledButton(
+                      onPressed: onSellerPortal,
+                      child: Text(
+                        sellerIsActive
+                            ? 'Open seller portal'
+                            : 'Continue setup',
+                      ),
+                    ),
+                  ]
+                : [
+                    FilledButton(
+                      onPressed: onStartSelling,
+                      child: const Text('Start selling'),
+                    ),
+                    OutlinedButton(
+                      onPressed: onSellerSignIn,
+                      child: const Text('Seller sign in'),
+                    ),
+                  ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _sellerStatusText({
+    required bool sellerIsActive,
+    required String? sellerStatus,
+  }) {
+    if (sellerIsActive ||
+        sellerStatus == 'active' ||
+        sellerStatus == 'approved') {
+      return 'Your seller account is ready. Open your portal to manage store operations.';
+    }
+
+    if (sellerStatus == 'pending_review') {
+      return 'Your seller account is under review. You can check status and continue from your seller portal.';
+    }
+
+    if (sellerStatus == 'rejected') {
+      return 'Your seller setup needs changes. Open your seller portal to review and update the required steps.';
+    }
+
+    return 'Continue your seller onboarding and finish the steps needed to submit your store for review.';
+  }
+}
+
+class _SignedInStoreBar extends StatelessWidget {
+  final String email;
+  final bool canAccessStaffDashboard;
+  final VoidCallback onSwitchStore;
+  final VoidCallback onProfile;
+  final VoidCallback onOrders;
+  final VoidCallback onStaff;
+
+  const _SignedInStoreBar({
+    required this.email,
+    required this.canAccessStaffDashboard,
+    required this.onSwitchStore,
+    required this.onProfile,
+    required this.onOrders,
+    required this.onStaff,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final actionStyle = TextButton.styleFrom(
+      foregroundColor: const Color(0xFF325A88),
+      textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      minimumSize: Size.zero,
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      visualDensity: VisualDensity.compact,
+    );
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 165),
+            child: Text(
+              email,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF6B7280),
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          IconButton(
+            onPressed: onSwitchStore,
+            visualDensity: VisualDensity.compact,
+            splashRadius: 20,
+            tooltip: 'Switch store',
+            icon: const Icon(
+              Icons.swap_horiz_rounded,
+              color: Color(0xFF325A88),
+            ),
+          ),
+          TextButton(
+            onPressed: onProfile,
+            style: actionStyle,
+            child: const Text('Profile'),
+          ),
+          TextButton(
+            onPressed: onOrders,
+            style: actionStyle,
+            child: const Text('Orders'),
+          ),
+          if (canAccessStaffDashboard)
+            TextButton(
+              onPressed: onStaff,
+              style: actionStyle,
+              child: const Text('Staff'),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GuestStoreBar extends StatelessWidget {
+  final VoidCallback onSwitchStore;
+  final VoidCallback onSignIn;
+
+  const _GuestStoreBar({required this.onSwitchStore, required this.onSignIn});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        const Expanded(
+          child: Text(
+            'Browse stores and sign in to track your orders.',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 13,
+              height: 1.35,
+              color: Color(0xFF6B7280),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        OutlinedButton(
+          onPressed: onSwitchStore,
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size(0, 40),
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          child: const Text('Switch'),
+        ),
+        const SizedBox(width: 8),
+        FilledButton(
+          onPressed: onSignIn,
+          style: FilledButton.styleFrom(
+            minimumSize: const Size(0, 40),
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          child: const Text('Sign in'),
+        ),
+      ],
     );
   }
 }

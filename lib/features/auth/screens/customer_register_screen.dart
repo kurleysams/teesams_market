@@ -1,47 +1,64 @@
+// lib/features/auth/screens/register_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../tenant/state/tenant_mode_provider.dart';
 import '../../tenant/state/tenant_provider.dart';
 import '../state/auth_provider.dart';
-import '../utils/mode_navigation.dart';
 
-class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+class RegisterScreen extends StatefulWidget {
+  const RegisterScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  State<RegisterScreen> createState() => _RegisterScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
+
+  final _nameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
+  final _phoneCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
+  final _confirmPasswordCtrl = TextEditingController();
 
+  final _nameFocus = FocusNode();
   final _emailFocus = FocusNode();
+  final _phoneFocus = FocusNode();
   final _passwordFocus = FocusNode();
+  final _confirmPasswordFocus = FocusNode();
 
-  bool _obscurePassword = true;
   bool _submitted = false;
+  bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
 
   @override
   void dispose() {
+    _nameCtrl.dispose();
     _emailCtrl.dispose();
+    _phoneCtrl.dispose();
     _passwordCtrl.dispose();
+    _confirmPasswordCtrl.dispose();
+
+    _nameFocus.dispose();
     _emailFocus.dispose();
+    _phoneFocus.dispose();
     _passwordFocus.dispose();
+    _confirmPasswordFocus.dispose();
     super.dispose();
+  }
+
+  String? _validateName(String? value) {
+    final text = value?.trim() ?? '';
+    if (text.isEmpty) return 'Enter your full name';
+    if (text.length < 2) return 'Name is too short';
+    return null;
   }
 
   String? _validateEmail(String? value) {
     final text = value?.trim() ?? '';
     if (text.isEmpty) return 'Enter your email';
-
     final emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
-    if (!emailRegex.hasMatch(text)) {
-      return 'Enter a valid email address';
-    }
-
+    if (!emailRegex.hasMatch(text)) return 'Enter a valid email address';
     return null;
   }
 
@@ -49,6 +66,12 @@ class _LoginScreenState extends State<LoginScreen> {
     final text = value ?? '';
     if (text.isEmpty) return 'Enter your password';
     if (text.length < 6) return 'Password must be at least 6 characters';
+    return null;
+  }
+
+  String? _validateConfirmPassword(String? value) {
+    if ((value ?? '').isEmpty) return 'Confirm your password';
+    if (value != _passwordCtrl.text) return 'Passwords do not match';
     return null;
   }
 
@@ -69,37 +92,23 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    final authProvider = context.read<AuthProvider>();
-    final tenantModeProvider = context.read<TenantModeProvider>();
-
     try {
-      await authProvider.login(
+      await context.read<AuthProvider>().register(
         tenantSlug: tenantSlug,
+        name: _nameCtrl.text.trim(),
         email: _emailCtrl.text.trim(),
+        phone: _phoneCtrl.text.trim().isEmpty ? null : _phoneCtrl.text.trim(),
         password: _passwordCtrl.text,
+        passwordConfirmation: _confirmPasswordCtrl.text,
       );
 
       if (!mounted) return;
 
-      if (authProvider.isAuthenticated && authProvider.token != null) {
-        await tenantModeProvider.loadBootstrap(
-          tenantSlug: tenantSlug,
-          authToken: authProvider.token!,
-        );
-      }
-
-      if (!mounted) return;
-
-      final bootstrap = tenantModeProvider.bootstrap;
-
-      if (authProvider.isAuthenticated &&
-          bootstrap != null &&
-          bootstrap.hasTenantMode) {
-        await ModeNavigation.goToTenant(context);
-        return;
-      }
-
-      await ModeNavigation.goToCustomer(context);
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        '/my-orders',
+        (route) => route.isFirst,
+      );
     } catch (_) {}
   }
 
@@ -113,7 +122,7 @@ class _LoginScreenState extends State<LoginScreen> {
             backgroundColor: const Color(0xFFF8FAFC),
             elevation: 0,
             scrolledUnderElevation: 0,
-            title: const Text('Sign in'),
+            title: const Text('Create account'),
           ),
           body: SafeArea(
             child: Center(
@@ -125,13 +134,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       const Icon(
-                        Icons.lock_outline,
+                        Icons.person_add_alt_1_outlined,
                         size: 56,
                         color: Color(0xFF1D4ED8),
                       ),
                       const SizedBox(height: 20),
                       const Text(
-                        'Welcome back',
+                        'Create your account',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 28,
@@ -141,7 +150,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 8),
                       const Text(
-                        'Sign in to view your orders and manage your account.',
+                        'Register to view your orders and manage your account.',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 15,
@@ -188,16 +197,36 @@ class _LoginScreenState extends State<LoginScreen> {
                           child: Column(
                             children: [
                               TextFormField(
+                                controller: _nameCtrl,
+                                focusNode: _nameFocus,
+                                textInputAction: TextInputAction.next,
+                                validator: _validateName,
+                                onFieldSubmitted: (_) {
+                                  FocusScope.of(
+                                    context,
+                                  ).requestFocus(_emailFocus);
+                                },
+                                decoration: InputDecoration(
+                                  labelText: 'Full name',
+                                  prefixIcon: const Icon(Icons.person_outline),
+                                  filled: true,
+                                  fillColor: const Color(0xFFF8FAFC),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                              TextFormField(
                                 controller: _emailCtrl,
                                 focusNode: _emailFocus,
                                 keyboardType: TextInputType.emailAddress,
                                 textInputAction: TextInputAction.next,
-                                autofillHints: const [AutofillHints.username],
                                 validator: _validateEmail,
                                 onFieldSubmitted: (_) {
                                   FocusScope.of(
                                     context,
-                                  ).requestFocus(_passwordFocus);
+                                  ).requestFocus(_phoneFocus);
                                 },
                                 decoration: InputDecoration(
                                   labelText: 'Email',
@@ -212,13 +241,37 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                               const SizedBox(height: 14),
                               TextFormField(
+                                controller: _phoneCtrl,
+                                focusNode: _phoneFocus,
+                                keyboardType: TextInputType.phone,
+                                textInputAction: TextInputAction.next,
+                                onFieldSubmitted: (_) {
+                                  FocusScope.of(
+                                    context,
+                                  ).requestFocus(_passwordFocus);
+                                },
+                                decoration: InputDecoration(
+                                  labelText: 'Phone (optional)',
+                                  prefixIcon: const Icon(Icons.phone_outlined),
+                                  filled: true,
+                                  fillColor: const Color(0xFFF8FAFC),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                              TextFormField(
                                 controller: _passwordCtrl,
                                 focusNode: _passwordFocus,
                                 obscureText: _obscurePassword,
-                                textInputAction: TextInputAction.done,
-                                autofillHints: const [AutofillHints.password],
+                                textInputAction: TextInputAction.next,
                                 validator: _validatePassword,
-                                onFieldSubmitted: (_) => _submit(),
+                                onFieldSubmitted: (_) {
+                                  FocusScope.of(
+                                    context,
+                                  ).requestFocus(_confirmPasswordFocus);
+                                },
                                 decoration: InputDecoration(
                                   labelText: 'Password',
                                   prefixIcon: const Icon(Icons.lock_outline),
@@ -241,12 +294,51 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                                 ),
                               ),
+                              const SizedBox(height: 14),
+                              TextFormField(
+                                controller: _confirmPasswordCtrl,
+                                focusNode: _confirmPasswordFocus,
+                                obscureText: _obscureConfirmPassword,
+                                textInputAction: TextInputAction.done,
+                                validator: _validateConfirmPassword,
+                                onFieldSubmitted: (_) => _submit(),
+                                decoration: InputDecoration(
+                                  labelText: 'Confirm password',
+                                  prefixIcon: const Icon(Icons.lock_outline),
+                                  suffixIcon: IconButton(
+                                    onPressed: () {
+                                      setState(() {
+                                        _obscureConfirmPassword =
+                                            !_obscureConfirmPassword;
+                                      });
+                                    },
+                                    icon: Icon(
+                                      _obscureConfirmPassword
+                                          ? Icons.visibility_outlined
+                                          : Icons.visibility_off_outlined,
+                                    ),
+                                  ),
+                                  filled: true,
+                                  fillColor: const Color(0xFFF8FAFC),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                ),
+                              ),
                               const SizedBox(height: 20),
                               SizedBox(
                                 width: double.infinity,
                                 height: 52,
                                 child: ElevatedButton(
                                   onPressed: auth.loading ? null : _submit,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF1D4ED8),
+                                    foregroundColor: Colors.white,
+                                    elevation: 0,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                  ),
                                   child: auth.loading
                                       ? const SizedBox(
                                           width: 18,
@@ -256,7 +348,13 @@ class _LoginScreenState extends State<LoginScreen> {
                                             color: Colors.white,
                                           ),
                                         )
-                                      : const Text('Sign in'),
+                                      : const Text(
+                                          'Create account',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 15,
+                                          ),
+                                        ),
                                 ),
                               ),
                             ],
@@ -268,18 +366,16 @@ class _LoginScreenState extends State<LoginScreen> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           const Text(
-                            "Don't have an account? ",
-                            style: TextStyle(
-                              color: Color(0xFF6B7280),
-                              fontSize: 13,
-                            ),
+                            'Already have an account? ',
+                            style: TextStyle(color: Color(0xFF6B7280)),
                           ),
                           TextButton(
                             onPressed: auth.loading
                                 ? null
-                                : () =>
-                                      Navigator.pushNamed(context, '/register'),
-                            child: const Text('Create account'),
+                                : () {
+                                    Navigator.pop(context);
+                                  },
+                            child: const Text('Sign in'),
                           ),
                         ],
                       ),

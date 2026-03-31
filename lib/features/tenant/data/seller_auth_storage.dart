@@ -1,7 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
-class AuthStorage {
-  static const _tokenKey = 'customer_auth_token';
+class SellerAuthStorage {
+  static const _tokenKey = 'seller_auth_token';
 
   Future<void> saveToken(String token) async {
     final prefs = await SharedPreferences.getInstance();

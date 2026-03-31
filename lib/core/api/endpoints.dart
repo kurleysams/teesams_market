@@ -45,4 +45,19 @@ class Endpoints {
 
   static const tenantVariantAvailabilityBulk =
       'v1/tenant/variants/availability/bulk';
+
+  // Seller / onboarding
+  static const sellerRegister = 'v1/seller/auth/register';
+  static const sellerLogin = 'v1/seller/auth/login';
+  static const sellerMe = 'v1/seller/auth/me';
+  static const sellerLogout = 'v1/seller/auth/logout';
+
+  static const sellerOnboardingStatus = 'v1/seller/onboarding/status';
+  static const sellerBusinessDetails = 'v1/seller/onboarding/business';
+  static const sellerStoreProfile = 'v1/seller/onboarding/store-profile';
+  static const sellerOperations = 'v1/seller/onboarding/operations';
+  static const sellerPayoutSetup = 'v1/seller/onboarding/payouts';
+  static const sellerDocuments = 'v1/seller/onboarding/documents';
+  static const sellerCatalogSetup = 'v1/seller/onboarding/catalog';
+  static const sellerSubmitForReview = 'v1/seller/onboarding/submit';
 }

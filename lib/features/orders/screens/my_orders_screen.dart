@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../auth/screens/login_screen.dart';
-import '../../auth/screens/register_screen.dart';
+import '../../auth/screens/customer_login_screen.dart';
+import '../../auth/screens/customer_register_screen.dart';
 import '../../auth/state/auth_provider.dart';
 import '../../tenant/state/tenant_provider.dart';
 import '../models/customer_order_summary.dart';
@@ -43,7 +43,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
   Future<void> _maybeLoadOrders() async {
     final auth = context.read<AuthProvider>();
 
-    if (!auth.isAuthenticated) {
+    if (!auth.isAuthenticated || auth.token == null || auth.token!.isEmpty) {
       setState(() {
         _future = null;
       });
@@ -56,6 +56,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
     setState(() {
       _future = context.read<OrderProvider>().fetchMyOrders(
         tenantSlug: tenantSlug,
+        authToken: auth.token!,
       );
     });
   }
@@ -63,7 +64,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
   Future<void> _reload() async {
     final auth = context.read<AuthProvider>();
 
-    if (!auth.isAuthenticated) {
+    if (!auth.isAuthenticated || auth.token == null || auth.token!.isEmpty) {
       setState(() {
         _future = null;
       });
@@ -75,6 +76,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
 
     final future = context.read<OrderProvider>().fetchMyOrders(
       tenantSlug: tenantSlug,
+      authToken: auth.token!,
     );
 
     setState(() {
@@ -87,7 +89,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
   Future<void> _openLogin() async {
     await Navigator.of(
       context,
-    ).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
+    ).push(MaterialPageRoute(builder: (_) => const CustomerLoginScreen()));
 
     if (!mounted) return;
     await _maybeLoadOrders();

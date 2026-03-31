@@ -1,11 +1,12 @@
+// lib/features/orders/screens/checkout_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/api/api_client.dart';
 import '../../../core/config/app_config.dart';
-import '../../auth/screens/login_screen.dart';
-import '../../auth/screens/register_screen.dart';
+import '../../auth/screens/customer_login_screen.dart';
+import '../../auth/screens/customer_register_screen.dart';
 import '../../auth/state/auth_provider.dart';
 import '../../cart/data/checkout_api.dart';
 import '../../cart/data/stripe_checkout_service.dart';
@@ -110,7 +111,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   Future<void> _openLogin() async {
     await Navigator.of(
       context,
-    ).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
+    ).push(MaterialPageRoute(builder: (_) => const CustomerLoginScreen()));
 
     if (!mounted) return;
     _prefillFromProfile();

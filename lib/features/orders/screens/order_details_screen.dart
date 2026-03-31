@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/config/app_config.dart';
+import '../../auth/state/auth_provider.dart';
 import '../models/order_tracking_model.dart';
 import '../state/order_provider.dart';
 
@@ -28,19 +29,42 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      _loadOrder();
+    });
+  }
 
+  void _loadOrder() {
+    final auth = context.read<AuthProvider>();
+
+    if (!auth.isAuthenticated || auth.token == null || auth.token!.isEmpty) {
       setState(() {
-        _future = context.read<OrderProvider>().fetchOrderDetails(
-          tenantSlug: widget.tenantSlug,
-          orderId: widget.orderId,
-        );
+        _future = Future.error(Exception('Please sign in to view this order'));
       });
+      return;
+    }
+
+    setState(() {
+      _future = context.read<OrderProvider>().fetchOrderDetails(
+        tenantSlug: widget.tenantSlug,
+        authToken: auth.token!,
+        orderId: widget.orderId,
+      );
     });
   }
 
   Future<void> _reload() async {
+    final auth = context.read<AuthProvider>();
+
+    if (!auth.isAuthenticated || auth.token == null || auth.token!.isEmpty) {
+      setState(() {
+        _future = Future.error(Exception('Please sign in to view this order'));
+      });
+      return;
+    }
+
     final future = context.read<OrderProvider>().fetchOrderDetails(
       tenantSlug: widget.tenantSlug,
+      authToken: auth.token!,
       orderId: widget.orderId,
     );
 

@@ -1,4 +1,3 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../../core/api/api_client.dart';
@@ -7,112 +6,54 @@ import '../models/customer_order_summary.dart';
 import '../models/order_tracking_model.dart';
 
 class OrderProvider extends ChangeNotifier {
-  bool _loadingOrders = false;
-  bool _loadingOrderDetails = false;
-  String? _error;
-
-  List<CustomerOrderSummary> _orders = [];
-  OrderTrackingModel? _selectedOrder;
-
-  bool get loadingOrders => _loadingOrders;
-  bool get loadingOrderDetails => _loadingOrderDetails;
-  String? get error => _error;
-
-  List<CustomerOrderSummary> get orders => _orders;
-  OrderTrackingModel? get selectedOrder => _selectedOrder;
-
   Future<List<CustomerOrderSummary>> fetchMyOrders({
     required String tenantSlug,
+    required String authToken,
   }) async {
-    _loadingOrders = true;
-    _error = null;
-    notifyListeners();
+    final api = await ApiClient.create(
+      tenantSlug: tenantSlug,
+      authToken: authToken,
+    );
 
-    try {
-      final api = await ApiClient.create(tenantSlug: tenantSlug);
+    final response = await api.dio.get(Endpoints.myOrders);
+    final data = response.data;
 
-      final response = await api.dio.get(Endpoints.myOrders);
-
-      final data = response.data;
-      if (data is! Map<String, dynamic>) {
-        throw Exception('Invalid orders response');
-      }
-
-      _orders = ((data['orders'] as List?) ?? [])
-          .map(
-            (e) => CustomerOrderSummary.fromJson(Map<String, dynamic>.from(e)),
-          )
-          .toList();
-
-      return _orders;
-    } on DioException catch (e) {
-      final data = e.response?.data;
-
-      if (data is Map && data['message'] != null) {
-        _error = data['message'].toString();
-      } else {
-        _error = e.message ?? 'Unable to fetch orders';
-      }
-
-      throw Exception(_error);
-    } catch (e) {
-      _error = e.toString().replaceFirst('Exception: ', '');
-      throw Exception(_error);
-    } finally {
-      _loadingOrders = false;
-      notifyListeners();
+    if (data is! Map<String, dynamic>) {
+      throw Exception('Invalid orders response');
     }
+
+    final items = (data['data'] ?? data['orders'] ?? []) as List<dynamic>;
+
+    return items
+        .map(
+          (e) => CustomerOrderSummary.fromJson(
+            Map<String, dynamic>.from(e as Map),
+          ),
+        )
+        .toList();
   }
 
   Future<OrderTrackingModel> fetchOrderDetails({
     required String tenantSlug,
+    required String authToken,
     required int orderId,
   }) async {
-    _loadingOrderDetails = true;
-    _error = null;
-    _selectedOrder = null;
-    notifyListeners();
+    final api = await ApiClient.create(
+      tenantSlug: tenantSlug,
+      authToken: authToken,
+    );
 
-    try {
-      final api = await ApiClient.create(tenantSlug: tenantSlug);
+    final response = await api.dio.get(Endpoints.myOrderDetails(orderId));
+    final data = response.data;
 
-      final response = await api.dio.get(Endpoints.myOrderDetails(orderId));
-
-      if (response.data is! Map<String, dynamic>) {
-        throw Exception('Invalid order details response');
-      }
-
-      final order = OrderTrackingModel.fromJson(response.data);
-      _selectedOrder = order;
-      return order;
-    } on DioException catch (e) {
-      final data = e.response?.data;
-
-      if (data is Map && data['message'] != null) {
-        _error = data['message'].toString();
-      } else if (e.response?.statusCode == 404) {
-        _error = 'Order not found';
-      } else {
-        _error = e.message ?? 'Unable to fetch order';
-      }
-
-      throw Exception(_error);
-    } catch (e) {
-      _error = e.toString().replaceFirst('Exception: ', '');
-      throw Exception(_error);
-    } finally {
-      _loadingOrderDetails = false;
-      notifyListeners();
+    if (data is! Map<String, dynamic>) {
+      throw Exception('Invalid order details response');
     }
-  }
 
-  void clearSelectedOrder() {
-    _selectedOrder = null;
-    notifyListeners();
-  }
+    final payload = data['data'] is Map<String, dynamic>
+        ? Map<String, dynamic>.from(data['data'] as Map)
+        : data;
 
-  void clearError() {
-    _error = null;
-    notifyListeners();
+    return OrderTrackingModel.fromJson(payload);
   }
 }

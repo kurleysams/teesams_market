@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../tenant/state/tenant_provider.dart';
-import '../screens/login_screen.dart';
+import 'customer_login_screen.dart';
 import '../state/auth_provider.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -59,7 +59,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (!mounted) return;
       await Navigator.of(
         context,
-      ).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
+      ).push(MaterialPageRoute(builder: (_) => const CustomerLoginScreen()));
       return;
     }
 
@@ -143,7 +143,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       onPressed: () async {
                         await Navigator.of(context).push(
                           MaterialPageRoute(
-                            builder: (_) => const LoginScreen(),
+                            builder: (_) => const CustomerLoginScreen(),
                           ),
                         );
                       },

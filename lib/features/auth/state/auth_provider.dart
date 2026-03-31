@@ -26,13 +26,15 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _token = await AuthStorage().getToken();
+      final storedToken = await AuthStorage().getToken();
 
-      if (_token == null || _token!.isEmpty) {
+      if (storedToken == null || storedToken.isEmpty) {
         _token = null;
         _user = null;
         return;
       }
+
+      _token = storedToken;
 
       final api = await ApiClient.create(
         tenantSlug: tenantSlug,
@@ -55,9 +57,10 @@ class AuthProvider extends ChangeNotifier {
         _user = null;
         await AuthStorage().clearToken();
       }
-    } catch (_) {
+    } catch (e) {
       _token = null;
       _user = null;
+      _error = e.toString().replaceFirst('Exception: ', '');
       await AuthStorage().clearToken();
     } finally {
       _loading = false;
@@ -241,6 +244,7 @@ class AuthProvider extends ChangeNotifier {
       );
     } on DioException catch (e) {
       final data = e.response?.data;
+
       if (data is Map && data['message'] != null) {
         _error = data['message'].toString();
       } else {
@@ -267,6 +271,7 @@ class AuthProvider extends ChangeNotifier {
         await api.dio.post(Endpoints.authLogout);
       }
     } catch (_) {
+      // ignore remote logout errors
     } finally {
       _token = null;
       _user = null;

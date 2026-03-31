@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'core/theme/app_theme.dart';
-import 'features/auth/screens/login_screen.dart';
+import 'features/auth/screens/customer_login_screen.dart';
+import 'features/auth/screens/customer_register_screen.dart';
 import 'features/auth/screens/mode_picker_screen.dart';
-import 'features/auth/screens/register_screen.dart';
 import 'features/auth/state/auth_provider.dart';
 import 'features/cart/screens/cart_screen.dart';
 import 'features/cart/state/cart_provider.dart';
@@ -17,14 +17,32 @@ import 'features/orders/screens/my_orders_screen.dart';
 import 'features/orders/screens/order_success_screen.dart';
 import 'features/orders/state/order_provider.dart';
 import 'features/payments/state/payment_provider.dart';
+import 'features/tenant/screens/app_mode_entry_screen.dart';
+import 'features/tenant/screens/seller_business_details_screen.dart';
+import 'features/tenant/screens/seller_documents_screen.dart';
+import 'features/tenant/screens/seller_login_screen.dart';
+import 'features/tenant/screens/seller_onboarding_home_screen.dart';
+import 'features/tenant/screens/seller_operations_screen.dart';
+import 'features/tenant/screens/seller_payouts_screen.dart';
+import 'features/tenant/screens/seller_register_screen.dart';
+import 'features/tenant/screens/seller_review_screen.dart';
+import 'features/tenant/screens/seller_store_profile_screen.dart';
+import 'features/tenant/screens/seller_welcome_screen.dart';
 import 'features/tenant/screens/tenant_selector.dart';
 import 'features/tenant/screens/tenant_shell_screen.dart';
+import 'features/tenant/state/seller_auth_provider.dart';
+import 'features/tenant/state/seller_onboarding_provider.dart';
 import 'features/tenant/state/tenant_dashboard_provider.dart';
 import 'features/tenant/state/tenant_mode_provider.dart';
 import 'features/tenant/state/tenant_orders_provider.dart';
 import 'features/tenant/state/tenant_product_provider.dart';
 import 'features/tenant/state/tenant_provider.dart';
 import 'features/tenant/state/tenant_store_provider.dart';
+import 'features/tenant/screens/seller_catalog_setup_screen.dart';
+import 'features/tenant/screens/seller_rejected_screen.dart';
+import 'features/tenant/screens/seller_approved_screen.dart';
+import 'features/tenant/screens/seller_pending_review_screen.dart';
+import 'features/tenant/state/app_session_provider.dart';
 
 class TeesamsMarketApp extends StatelessWidget {
   const TeesamsMarketApp({super.key});
@@ -67,6 +85,21 @@ class TeesamsMarketApp extends StatelessWidget {
         ChangeNotifierProvider<TenantProductProvider>(
           create: (_) => TenantProductProvider(),
         ),
+        ChangeNotifierProvider<SellerAuthProvider>(
+          create: (_) => SellerAuthProvider(),
+        ),
+        ChangeNotifierProxyProvider<
+          SellerAuthProvider,
+          SellerOnboardingProvider
+        >(
+          create: (context) =>
+              SellerOnboardingProvider(context.read<SellerAuthProvider>()),
+          update: (_, sellerAuthProvider, previous) =>
+              previous ?? SellerOnboardingProvider(sellerAuthProvider),
+        ),
+        ChangeNotifierProvider<AppSessionProvider>(
+          create: (_) => AppSessionProvider(),
+        ),
       ],
       child: MaterialApp(
         title: 'Teesams Market',
@@ -75,14 +108,23 @@ class TeesamsMarketApp extends StatelessWidget {
         home: const _AppEntry(),
         routes: {
           '/catalog-home': (_) => const _AppEntry(),
+          '/entry': (_) => const AppModeEntryScreen(),
+          '/mode-picker': (_) => const ModePickerScreen(),
           '/tenant-selector': (_) => const TenantSelector(),
+          '/tenant-shell': (_) => const TenantShellScreen(),
+
           '/cart': (_) => const CartScreen(),
           '/checkout': (_) => const CheckoutScreen(),
           '/order-success': (_) => const OrderSuccessScreen(),
-          '/login': (_) => const LoginScreen(),
+
+          // Keep these only if older parts of the app still use them.
+          '/login': (_) => const CustomerLoginScreen(),
           '/register': (_) => const RegisterScreen(),
-          '/mode-picker': (_) => const ModePickerScreen(),
-          '/tenant-shell': (_) => const TenantShellScreen(),
+
+          // Preferred explicit customer routes
+          '/customer/login': (_) => const CustomerLoginScreen(),
+          '/customer/register': (_) => const RegisterScreen(),
+
           '/my-orders': (context) {
             final auth = Provider.of<AuthProvider>(context, listen: false);
             final tenant = Provider.of<TenantProvider>(
@@ -91,11 +133,30 @@ class TeesamsMarketApp extends StatelessWidget {
             ).tenant;
 
             if (!auth.isAuthenticated) {
-              return const LoginScreen();
+              return const CustomerLoginScreen();
             }
 
             return MyOrdersScreen(tenantSlug: tenant?.slug ?? '');
           },
+
+          // Seller flow
+          '/seller/welcome': (_) => const SellerWelcomeScreen(),
+          '/seller/login': (_) => const SellerLoginScreen(),
+          '/seller/register': (_) => const SellerRegisterScreen(),
+          '/seller/onboarding': (_) => const SellerOnboardingHomeScreen(),
+          '/seller/onboarding/business': (_) =>
+              const SellerBusinessDetailsScreen(),
+          '/seller/onboarding/store-profile': (_) =>
+              const SellerStoreProfileScreen(),
+          '/seller/onboarding/operations': (_) =>
+              const SellerOperationsScreen(),
+          '/seller/onboarding/documents': (_) => const SellerDocumentsScreen(),
+          '/seller/onboarding/payouts': (_) => const SellerPayoutsScreen(),
+          '/seller/onboarding/review': (_) => const SellerReviewScreen(),
+          '/seller/onboarding/catalog': (_) => const SellerCatalogSetupScreen(),
+          '/seller/pending-review': (_) => const SellerPendingReviewScreen(),
+          '/seller/approved': (_) => const SellerApprovedScreen(),
+          '/seller/rejected': (_) => const SellerRejectedScreen(),
         },
         onGenerateRoute: (settings) {
           if (settings.name == '/product-details') {
@@ -131,7 +192,10 @@ class _AppEntryState extends State<_AppEntry> {
     final tenantProvider = context.watch<TenantProvider>();
     final catalogProvider = context.read<CatalogProvider>();
     final authProvider = context.read<AuthProvider>();
+    final sellerAuthProvider = context.read<SellerAuthProvider>();
+    final sellerOnboardingProvider = context.read<SellerOnboardingProvider>();
     final tenantModeProvider = context.read<TenantModeProvider>();
+    final appSessionProvider = context.read<AppSessionProvider>();
     final tenant = tenantProvider.tenant;
 
     if (tenant != null && tenant.slug != _lastTenantSlug) {
@@ -143,24 +207,20 @@ class _AppEntryState extends State<_AppEntry> {
         await catalogProvider.loadCatalogForTenant(tenant.slug);
         if (!mounted) return;
 
-        await authProvider.loadSession(tenantSlug: tenant.slug);
+        await appSessionProvider.initialize(
+          tenantSlug: tenant.slug,
+          authProvider: authProvider,
+          sellerAuthProvider: sellerAuthProvider,
+          sellerOnboardingProvider: sellerOnboardingProvider,
+          tenantModeProvider: tenantModeProvider,
+        );
+
         if (!mounted) return;
 
-        if (authProvider.isAuthenticated && authProvider.token != null) {
-          await tenantModeProvider.loadBootstrap(
-            tenantSlug: tenant.slug,
-            authToken: authProvider.token,
-          );
-
-          if (!mounted) return;
-
-          await _resolveInitialMode(
-            authProvider: authProvider,
-            tenantModeProvider: tenantModeProvider,
-          );
-        } else {
-          tenantModeProvider.clear();
-        }
+        await _resolveInitialMode(
+          authProvider: authProvider,
+          tenantModeProvider: tenantModeProvider,
+        );
 
         if (mounted) {
           setState(() {
@@ -202,10 +262,12 @@ class _AppEntryState extends State<_AppEntry> {
     final tenantProvider = context.watch<TenantProvider>();
     final authProvider = context.watch<AuthProvider>();
     final tenantModeProvider = context.watch<TenantModeProvider>();
+    final appSessionProvider = context.watch<AppSessionProvider>();
 
     if (tenantProvider.loading ||
         authProvider.loading ||
         tenantModeProvider.loading ||
+        appSessionProvider.loading ||
         !_didInit) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
@@ -234,6 +296,7 @@ class _AppEntryState extends State<_AppEntry> {
                       _didInit = false;
                       _lastTenantSlug = null;
                     });
+                    context.read<AppSessionProvider>().reset();
                     tenantProvider.loadTenant();
                   },
                   child: const Text('Try again'),

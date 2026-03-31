@@ -1,7 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
-import '../../features/auth/data/auth_storage.dart';
 import '../config/app_config.dart';
 
 class ApiClient {
@@ -10,24 +9,19 @@ class ApiClient {
   ApiClient._(this.dio);
 
   static Future<ApiClient> create({
-    required String tenantSlug,
+    String? tenantSlug,
     String? authToken,
   }) async {
-    final storedToken = await AuthStorage().getToken();
-    final token = authToken ?? storedToken;
+    final headers = <String, dynamic>{
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+      if (tenantSlug != null && tenantSlug.trim().isNotEmpty)
+        'X-Tenant': tenantSlug,
+      if (authToken != null && authToken.isNotEmpty)
+        'Authorization': 'Bearer $authToken',
+    };
 
-    final dio = Dio(
-      BaseOptions(
-        baseUrl: AppConfig.baseUrl,
-        headers: {
-          'X-Tenant': tenantSlug,
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-          if (token != null && token.isNotEmpty)
-            'Authorization': 'Bearer $token',
-        },
-      ),
-    );
+    final dio = Dio(BaseOptions(baseUrl: AppConfig.baseUrl, headers: headers));
 
     dio.interceptors.add(
       InterceptorsWrapper(
@@ -36,8 +30,12 @@ class ApiClient {
           final hasAuth =
               authHeader != null && authHeader.toString().trim().isNotEmpty;
 
+          final tenantHeader = options.headers['X-Tenant'];
+          final hasTenant =
+              tenantHeader != null && tenantHeader.toString().trim().isNotEmpty;
+
           debugPrint('API REQUEST -> ${options.method} ${options.uri}');
-          debugPrint('API TENANT -> ${options.headers['X-Tenant']}');
+          debugPrint('API TENANT HEADER PRESENT -> $hasTenant');
           debugPrint('API AUTH HEADER PRESENT -> $hasAuth');
 
           handler.next(options);
@@ -46,5 +44,31 @@ class ApiClient {
     );
 
     return ApiClient._(dio);
+  }
+
+  Future<void> setAuthToken(String? token) async {
+    if (token == null || token.trim().isEmpty) {
+      dio.options.headers.remove('Authorization');
+      return;
+    }
+
+    dio.options.headers['Authorization'] = 'Bearer $token';
+  }
+
+  Future<void> setTenantSlug(String? tenantSlug) async {
+    if (tenantSlug == null || tenantSlug.trim().isEmpty) {
+      dio.options.headers.remove('X-Tenant');
+      return;
+    }
+
+    dio.options.headers['X-Tenant'] = tenantSlug;
+  }
+
+  Future<void> clearTenantSlug() async {
+    dio.options.headers.remove('X-Tenant');
+  }
+
+  Future<void> clearAuthToken() async {
+    dio.options.headers.remove('Authorization');
   }
 }
