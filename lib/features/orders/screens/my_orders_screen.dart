@@ -246,16 +246,32 @@ class _OrderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final orderStatusLabel = _statusLabel(order.status);
+    final orderStatusRaw = order.status.trim();
     final paymentStatusRaw = order.paymentStatus?.trim();
+
+    final orderStatusLabel = _orderStatusCustomerLabel(orderStatusRaw);
     final paymentStatusLabel =
         (paymentStatusRaw == null || paymentStatusRaw.isEmpty)
         ? null
-        : _statusLabel(paymentStatusRaw);
+        : _paymentStatusCustomerLabel(paymentStatusRaw);
+
+    final normalizedOrderStatus = orderStatusRaw.toLowerCase();
+    final normalizedPaymentStatus = paymentStatusRaw?.toLowerCase();
+
+    final hidePendingPaymentForConfirmedFlow =
+        normalizedPaymentStatus == 'pending' &&
+        const {
+          'confirmed',
+          'processing',
+          'shipped',
+          'delivered',
+          'completed',
+        }.contains(normalizedOrderStatus);
 
     final showPaymentBadge =
         paymentStatusLabel != null &&
-        paymentStatusLabel.toLowerCase() != orderStatusLabel.toLowerCase();
+        paymentStatusLabel.toLowerCase() != orderStatusLabel.toLowerCase() &&
+        !hidePendingPaymentForConfirmedFlow;
 
     return Material(
       color: Colors.white,
@@ -301,7 +317,7 @@ class _OrderCard extends StatelessWidget {
                 children: [
                   _StatusBadge(
                     label: orderStatusLabel,
-                    kind: _orderStatusKind(order.status),
+                    kind: _orderStatusKind(orderStatusRaw),
                   ),
                   if (showPaymentBadge)
                     _StatusBadge(
@@ -526,4 +542,41 @@ String _friendlyDate(String? value) {
 
 String _formatAmount(double value) {
   return value.toStringAsFixed(2);
+}
+
+String _orderStatusCustomerLabel(String status) {
+  switch (status.trim().toLowerCase()) {
+    case 'pending':
+      return 'Order pending';
+    case 'confirmed':
+      return 'Order confirmed';
+    case 'processing':
+      return 'Preparing order';
+    case 'shipped':
+      return 'Out for delivery';
+    case 'delivered':
+      return 'Delivered';
+    case 'cancelled':
+      return 'Order cancelled';
+    case 'failed':
+      return 'Order failed';
+    default:
+      return _statusLabel(status);
+  }
+}
+
+String _paymentStatusCustomerLabel(String status) {
+  switch (status.trim().toLowerCase()) {
+    case 'pending':
+      return 'Payment pending';
+    case 'paid':
+    case 'succeeded':
+      return 'Payment confirmed';
+    case 'failed':
+      return 'Payment failed';
+    case 'cancelled':
+      return 'Payment cancelled';
+    default:
+      return _statusLabel(status);
+  }
 }

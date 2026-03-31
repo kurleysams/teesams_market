@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'core/theme/app_theme.dart';
+import 'features/admin/screens/admin_tenant_review_screen.dart';
 import 'features/auth/screens/customer_login_screen.dart';
 import 'features/auth/screens/customer_register_screen.dart';
 import 'features/auth/screens/mode_picker_screen.dart';
@@ -18,18 +19,23 @@ import 'features/orders/screens/order_success_screen.dart';
 import 'features/orders/state/order_provider.dart';
 import 'features/payments/state/payment_provider.dart';
 import 'features/tenant/screens/app_mode_entry_screen.dart';
+import 'features/tenant/screens/seller_approved_screen.dart';
 import 'features/tenant/screens/seller_business_details_screen.dart';
+import 'features/tenant/screens/seller_catalog_setup_screen.dart';
 import 'features/tenant/screens/seller_documents_screen.dart';
 import 'features/tenant/screens/seller_login_screen.dart';
 import 'features/tenant/screens/seller_onboarding_home_screen.dart';
 import 'features/tenant/screens/seller_operations_screen.dart';
 import 'features/tenant/screens/seller_payouts_screen.dart';
+import 'features/tenant/screens/seller_pending_review_screen.dart';
 import 'features/tenant/screens/seller_register_screen.dart';
+import 'features/tenant/screens/seller_rejected_screen.dart';
 import 'features/tenant/screens/seller_review_screen.dart';
 import 'features/tenant/screens/seller_store_profile_screen.dart';
 import 'features/tenant/screens/seller_welcome_screen.dart';
 import 'features/tenant/screens/tenant_selector.dart';
 import 'features/tenant/screens/tenant_shell_screen.dart';
+import 'features/tenant/state/app_session_provider.dart';
 import 'features/tenant/state/seller_auth_provider.dart';
 import 'features/tenant/state/seller_onboarding_provider.dart';
 import 'features/tenant/state/tenant_dashboard_provider.dart';
@@ -38,11 +44,6 @@ import 'features/tenant/state/tenant_orders_provider.dart';
 import 'features/tenant/state/tenant_product_provider.dart';
 import 'features/tenant/state/tenant_provider.dart';
 import 'features/tenant/state/tenant_store_provider.dart';
-import 'features/tenant/screens/seller_catalog_setup_screen.dart';
-import 'features/tenant/screens/seller_rejected_screen.dart';
-import 'features/tenant/screens/seller_approved_screen.dart';
-import 'features/tenant/screens/seller_pending_review_screen.dart';
-import 'features/tenant/state/app_session_provider.dart';
 
 class TeesamsMarketApp extends StatelessWidget {
   const TeesamsMarketApp({super.key});
@@ -112,16 +113,15 @@ class TeesamsMarketApp extends StatelessWidget {
           '/mode-picker': (_) => const ModePickerScreen(),
           '/tenant-selector': (_) => const TenantSelector(),
           '/tenant-shell': (_) => const TenantShellScreen(),
-
           '/cart': (_) => const CartScreen(),
           '/checkout': (_) => const CheckoutScreen(),
           '/order-success': (_) => const OrderSuccessScreen(),
 
-          // Keep these only if older parts of the app still use them.
+          // Legacy aliases
           '/login': (_) => const CustomerLoginScreen(),
           '/register': (_) => const RegisterScreen(),
 
-          // Preferred explicit customer routes
+          // Explicit customer routes
           '/customer/login': (_) => const CustomerLoginScreen(),
           '/customer/register': (_) => const RegisterScreen(),
 
@@ -167,6 +167,26 @@ class TeesamsMarketApp extends StatelessWidget {
               );
             }
           }
+
+          if (settings.name == '/admin/tenant-review') {
+            final args = settings.arguments;
+            if (args is Map<String, dynamic>) {
+              final tenantId = args['tenantId'];
+              final tenantName = args['tenantName'];
+              final status = args['status'];
+
+              if (tenantId is int && tenantName is String && status is String) {
+                return MaterialPageRoute(
+                  builder: (_) => AdminTenantReviewScreen(
+                    tenantId: tenantId,
+                    tenantName: tenantName,
+                    status: status,
+                  ),
+                );
+              }
+            }
+          }
+
           return null;
         },
       ),

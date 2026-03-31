@@ -3,6 +3,14 @@ class OnboardingStatus {
   final String status;
   final String verificationStatus;
   final bool isActive;
+
+  final String? submittedForReviewAt;
+  final String? approvedAt;
+  final String? rejectedAt;
+  final String? rejectionReason;
+  final String? reviewNotes;
+  final List<String> reviewIssues;
+
   final List<OnboardingStep> steps;
   final bool canSubmitForReview;
   final List<String> missingRequirements;
@@ -17,6 +25,12 @@ class OnboardingStatus {
     required this.status,
     required this.verificationStatus,
     required this.isActive,
+    required this.submittedForReviewAt,
+    required this.approvedAt,
+    required this.rejectedAt,
+    required this.rejectionReason,
+    required this.reviewNotes,
+    required this.reviewIssues,
     required this.steps,
     required this.canSubmitForReview,
     required this.missingRequirements,
@@ -27,6 +41,12 @@ class OnboardingStatus {
     required this.payouts,
   });
 
+  bool get isPendingReview => status == 'pending_review';
+  bool get isApproved => status == 'approved';
+  bool get isRejected => status == 'rejected';
+  bool get isInProgress =>
+      status == 'draft' || status == 'onboarding_in_progress';
+
   factory OnboardingStatus.fromApiResponse(Map<String, dynamic> json) {
     final data = json['data'] as Map<String, dynamic>;
 
@@ -35,12 +55,20 @@ class OnboardingStatus {
       status: data['status'] as String,
       verificationStatus: data['verification_status'] as String,
       isActive: data['is_active'] as bool,
+      submittedForReviewAt: data['submitted_for_review_at'] as String?,
+      approvedAt: data['approved_at'] as String?,
+      rejectedAt: data['rejected_at'] as String?,
+      rejectionReason: data['rejection_reason'] as String?,
+      reviewNotes: data['review_notes'] as String?,
+      reviewIssues: ((data['review_issues'] as List<dynamic>?) ?? const [])
+          .map((e) => e.toString())
+          .toList(),
       steps: (data['steps'] as List<dynamic>)
           .map((e) => OnboardingStep.fromJson(e as Map<String, dynamic>))
           .toList(),
       canSubmitForReview: data['can_submit_for_review'] as bool,
       missingRequirements: (data['missing_requirements'] as List<dynamic>)
-          .map((e) => e as String)
+          .map((e) => e.toString())
           .toList(),
       business: BusinessDetails.fromJson(
         data['business'] as Map<String, dynamic>,
