@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../auth/state/auth_provider.dart';
 import '../../auth/utils/mode_navigation.dart';
 import '../state/tenant_provider.dart';
+import 'tenant_catalog_imports_screen.dart';
 import 'tenant_dashboard_screen.dart';
 import 'tenant_orders_screen.dart';
 import 'tenant_store_screen.dart';
@@ -23,7 +24,7 @@ class _TenantShellScreenState extends State<TenantShellScreen> {
   @override
   void initState() {
     super.initState();
-    _currentIndex = widget.initialIndex.clamp(0, 2);
+    _currentIndex = widget.initialIndex.clamp(0, 3);
   }
 
   Future<void> _handleMenu(String value) async {
@@ -70,6 +71,7 @@ class _TenantShellScreenState extends State<TenantShellScreen> {
           TenantDashboardScreen(),
           TenantOrdersScreen(),
           TenantStoreScreen(),
+          TenantCatalogImportsScreen(),
         ],
       ),
       bottomNavigationBar: NavigationBar(
@@ -95,6 +97,11 @@ class _TenantShellScreenState extends State<TenantShellScreen> {
             icon: Icon(Icons.storefront_outlined),
             selectedIcon: Icon(Icons.storefront),
             label: 'Store',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.upload_file_outlined),
+            selectedIcon: Icon(Icons.upload_file),
+            label: 'Catalog',
           ),
         ],
       ),

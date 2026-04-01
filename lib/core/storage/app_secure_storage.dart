@@ -6,6 +6,7 @@ class AppSecureStorage {
   static const authTokenKey = 'auth_token';
   static const selectedAppModeKey = 'selected_app_mode';
   static const selectedTenantStoreIdKey = 'selected_tenant_store_id';
+  static const selectedTenantSlugKey = 'selected_tenant_slug';
 
   Future<void> write(String key, String value) async {
     await _storage.write(key: key, value: value);

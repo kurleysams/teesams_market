@@ -2,10 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/config/app_config.dart';
+import '../../auth/state/auth_provider.dart';
+import '../../catalog/state/catalog_provider.dart';
+import '../state/tenant_mode_provider.dart';
 import '../state/tenant_provider.dart';
 
-class TenantSelector extends StatelessWidget {
+class TenantSelector extends StatefulWidget {
   const TenantSelector({super.key});
+
+  @override
+  State<TenantSelector> createState() => _TenantSelectorState();
+}
+
+class _TenantSelectorState extends State<TenantSelector> {
+  bool _switching = false;
+  String? _switchingSlug;
 
   String? _normalizeUrl(String? value) {
     if (value == null) return null;
@@ -25,10 +36,74 @@ class TenantSelector extends StatelessWidget {
     return '$origin/$trimmed';
   }
 
+  Future<void> _handleTenantTap(BuildContext context, dynamic tenant) async {
+    final tenantProvider = context.read<TenantProvider>();
+    final authProvider = context.read<AuthProvider>();
+    final catalogProvider = context.read<CatalogProvider>();
+    final tenantModeProvider = context.read<TenantModeProvider>();
+
+    final isSelected = tenantProvider.slug == tenant.slug;
+    if (isSelected) {
+      Navigator.pop(context);
+      return;
+    }
+
+    setState(() {
+      _switching = true;
+      _switchingSlug = tenant.slug;
+    });
+
+    try {
+      await tenantProvider.switchTenant(tenant);
+
+      await catalogProvider.loadCatalogForTenant(tenant.slug);
+
+      await authProvider.loadSession(tenantSlug: tenant.slug);
+
+      if (authProvider.isAuthenticated && authProvider.token != null) {
+        await tenantModeProvider.loadBootstrap(
+          tenantSlug: tenant.slug,
+          authToken: authProvider.token,
+        );
+      } else {
+        tenantModeProvider.clear();
+      }
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Switched to ${tenant.name}')));
+
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        '/catalog-home',
+        (route) => false,
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Unable to switch store: ${e.toString().replaceFirst('Exception: ', '')}',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _switching = false;
+          _switchingSlug = null;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final tenantProvider = context.watch<TenantProvider>();
-    final currentSlug = tenantProvider.tenant?.slug;
+    final currentSlug = tenantProvider.slug;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
@@ -45,7 +120,9 @@ class TenantSelector extends StatelessWidget {
           ),
         ),
       ),
-      body: tenantProvider.tenants.isEmpty
+      body: tenantProvider.loading && tenantProvider.tenants.isEmpty
+          ? const Center(child: CircularProgressIndicator())
+          : tenantProvider.tenants.isEmpty
           ? const Center(
               child: Text(
                 'No stores available',
@@ -61,114 +138,127 @@ class TenantSelector extends StatelessWidget {
                 final logoUrl = _normalizeUrl(tenant.logoUrl);
                 final bannerUrl = _normalizeUrl(tenant.bannerUrl);
                 final isSelected = currentSlug == tenant.slug;
+                final isSwitchingThis =
+                    _switching && _switchingSlug == tenant.slug;
 
-                return InkWell(
-                  borderRadius: BorderRadius.circular(18),
-                  onTap: () async {
-                    // Replace this with your actual provider method when ready.
-                    // For now this safely closes if already selected.
-                    if (isSelected) {
-                      Navigator.pop(context);
-                      return;
-                    }
-
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Selected ${tenant.name}')),
-                    );
-                    Navigator.pop(context);
-                  },
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(
-                        color: isSelected
-                            ? const Color(0xFF3B82F6)
-                            : const Color(0xFFE5E7EB),
-                        width: isSelected ? 1.6 : 1.0,
-                      ),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Color(0x08000000),
-                          blurRadius: 8,
-                          offset: Offset(0, 3),
+                return Opacity(
+                  opacity: _switching && !isSwitchingThis ? 0.65 : 1,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(18),
+                    onTap: _switching
+                        ? null
+                        : () => _handleTenantTap(context, tenant),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: isSelected
+                              ? const Color(0xFF3B82F6)
+                              : const Color(0xFFE5E7EB),
+                          width: isSelected ? 1.6 : 1.0,
                         ),
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-                        _TenantBanner(bannerUrl: bannerUrl, name: tenant.name),
-                        Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Row(
-                            children: [
-                              _TenantLogo(logoUrl: logoUrl, name: tenant.name),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            tenant.name,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.w800,
-                                              color: Color(0xFF111827),
-                                            ),
-                                          ),
-                                        ),
-                                        if (isSelected)
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 8,
-                                              vertical: 3,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFFE8F1FF),
-                                              borderRadius:
-                                                  BorderRadius.circular(999),
-                                            ),
-                                            child: const Text(
-                                              'Current',
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w700,
-                                                color: Color(0xFF1D4ED8),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x08000000),
+                            blurRadius: 8,
+                            offset: Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        children: [
+                          _TenantBanner(
+                            bannerUrl: bannerUrl,
+                            name: tenant.name,
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Row(
+                              children: [
+                                _TenantLogo(
+                                  logoUrl: logoUrl,
+                                  name: tenant.name,
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              tenant.name,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w800,
+                                                color: Color(0xFF111827),
                                               ),
                                             ),
                                           ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 3),
-                                    Text(
-                                      tenant.tagline?.trim().isNotEmpty == true
-                                          ? tenant.tagline!.trim()
-                                          : tenant.slug,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        fontSize: 13,
-                                        color: Color(0xFF6B7280),
+                                          if (isSelected)
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 8,
+                                                    vertical: 3,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFE8F1FF),
+                                                borderRadius:
+                                                    BorderRadius.circular(999),
+                                              ),
+                                              child: const Text(
+                                                'Current',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: Color(0xFF1D4ED8),
+                                                ),
+                                              ),
+                                            ),
+                                        ],
                                       ),
-                                    ),
-                                  ],
+                                      const SizedBox(height: 3),
+                                      Text(
+                                        tenant.tagline?.trim().isNotEmpty ==
+                                                true
+                                            ? tenant.tagline!.trim()
+                                            : tenant.slug,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          color: Color(0xFF6B7280),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(width: 8),
-                              const Icon(
-                                Icons.chevron_right,
-                                color: Color(0xFF6B7280),
-                                size: 22,
-                              ),
-                            ],
+                                const SizedBox(width: 8),
+                                if (isSwitchingThis)
+                                  const SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.2,
+                                    ),
+                                  )
+                                else
+                                  const Icon(
+                                    Icons.chevron_right,
+                                    color: Color(0xFF6B7280),
+                                    size: 22,
+                                  ),
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 );
