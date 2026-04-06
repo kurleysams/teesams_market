@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../../core/api/api_client.dart';
 import '../data/admin_tenant_api.dart';
 import '../widgets/admin_tenant_review_card.dart';
 
@@ -21,7 +23,7 @@ class AdminTenantReviewScreen extends StatefulWidget {
 }
 
 class _AdminTenantReviewScreenState extends State<AdminTenantReviewScreen> {
-  final AdminTenantApi _api = AdminTenantApi();
+  late final AdminTenantApi _api;
 
   AdminTenantReviewDetail? _detail;
   bool _loading = true;
@@ -31,6 +33,8 @@ class _AdminTenantReviewScreenState extends State<AdminTenantReviewScreen> {
   @override
   void initState() {
     super.initState();
+    final apiClient = context.read<ApiClient>();
+    _api = AdminTenantApi(apiClient.dio);
     _reloadTenant();
   }
 
@@ -101,9 +105,59 @@ class _AdminTenantReviewScreenState extends State<AdminTenantReviewScreen> {
     }
   }
 
+  Color _stripeStatusColor(String status) {
+    switch (status) {
+      case 'active':
+        return Colors.green;
+      case 'pending':
+        return Colors.orange;
+      case 'restricted':
+        return Colors.red;
+      default:
+        return const Color(0xFF6B7280);
+    }
+  }
+
   String _value(dynamic value) {
     final text = value?.toString().trim() ?? '';
     return text.isEmpty ? '—' : text;
+  }
+
+  Map<String, dynamic>? get _stripe {
+    final payouts = _detail?.payouts;
+    if (payouts == null) return null;
+    final stripe = payouts['stripe'];
+    if (stripe is Map<String, dynamic>) return stripe;
+    if (stripe is Map) return Map<String, dynamic>.from(stripe);
+    return null;
+  }
+
+  bool get _stripeHasAccount => _stripe?['has_account'] == true;
+  bool get _stripeDetailsSubmitted => _stripe?['details_submitted'] == true;
+  bool get _stripeChargesEnabled => _stripe?['charges_enabled'] == true;
+  bool get _stripePayoutsEnabled => _stripe?['payouts_enabled'] == true;
+  bool get _stripeApproved => _detail?.payouts?['setup_complete'] == true;
+
+  String get _stripeStatus {
+    final value = _stripe?['onboarding_status']?.toString().trim() ?? '';
+    return value.isEmpty ? 'unknown' : value;
+  }
+
+  List<String> get _stripeRequirementsCurrentlyDue {
+    final raw = _stripe?['requirements_currently_due'];
+    if (raw is List) {
+      return raw
+          .map((e) => e.toString())
+          .where((e) => e.trim().isNotEmpty)
+          .toList();
+    }
+    return const [];
+  }
+
+  String? get _stripeDisabledReason {
+    final value = _stripe?['requirements_disabled_reason']?.toString().trim();
+    if (value == null || value.isEmpty) return null;
+    return value;
   }
 
   Future<void> _approve() async {
@@ -234,9 +288,10 @@ class _AdminTenantReviewScreenState extends State<AdminTenantReviewScreen> {
     );
   }
 
-  Widget _buildDocumentsCard(Map<String, dynamic>? documents) {
-    final requiredDocs =
-        (documents?['required'] as List<dynamic>? ?? const <dynamic>[]);
+  Widget _buildStripeApprovalCard() {
+    final stripe = _stripe;
+    final status = _stripeStatus;
+    final statusColor = _stripeStatusColor(status);
 
     return Container(
       padding: const EdgeInsets.all(18),
@@ -249,7 +304,7 @@ class _AdminTenantReviewScreenState extends State<AdminTenantReviewScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Documents',
+            'Stripe approval',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w800,
@@ -257,75 +312,185 @@ class _AdminTenantReviewScreenState extends State<AdminTenantReviewScreen> {
             ),
           ),
           const SizedBox(height: 14),
-          if (requiredDocs.isEmpty)
+          Row(
+            children: [
+              const Text(
+                'Status: ',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF111827),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: statusColor.withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: statusColor.withOpacity(0.25)),
+                ),
+                child: Text(
+                  _prettyLabel(status),
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: statusColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          if (stripe == null)
             const Text(
-              'No document data available.',
+              'No Stripe data available.',
               style: TextStyle(fontSize: 14, color: Color(0xFF6B7280)),
             )
-          else
-            ...requiredDocs.map((item) {
-              final doc = Map<String, dynamic>.from(item as Map);
-              final status = _value(doc['status']);
-              final uploaded = doc['uploaded'] == true;
-              final fileName = _value(doc['file_name']);
-
-              final color = switch (status.toLowerCase()) {
-                'uploaded' || 'approved' => Colors.green,
-                'under review' || 'under_review' || 'pending' => Colors.orange,
-                'rejected' => Colors.red,
-                _ => const Color(0xFF6B7280),
-              };
-
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      uploaded
-                          ? Icons.insert_drive_file_outlined
-                          : Icons.upload_file_outlined,
-                      color: color,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _value(doc['label']),
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF111827),
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            status,
-                            style: TextStyle(
-                              color: color,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          if (fileName != '—') ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              fileName,
-                              style: const TextStyle(
-                                fontSize: 13,
-                                color: Color(0xFF6B7280),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ],
+          else ...[
+            _buildFlagRow('Stripe account connected', _stripeHasAccount),
+            _buildFlagRow('Details submitted', _stripeDetailsSubmitted),
+            _buildFlagRow('Payments enabled', _stripeChargesEnabled),
+            _buildFlagRow('Payouts enabled', _stripePayoutsEnabled),
+            _buildFlagRow('Approved for marketplace', _stripeApproved),
+            const SizedBox(height: 12),
+            if ((_stripe?['account_id']?.toString().trim().isNotEmpty ?? false))
+              Text(
+                'Account ID: ${_stripe?['account_id']}',
+                style: const TextStyle(fontSize: 13, color: Color(0xFF374151)),
+              ),
+            if ((_stripe?['account_type']?.toString().trim().isNotEmpty ??
+                false))
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  'Account type: ${_stripe?['account_type']}',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Color(0xFF374151),
+                  ),
                 ),
-              );
-            }),
+              ),
+            if ((_stripe?['onboarded_at']?.toString().trim().isNotEmpty ??
+                false))
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  'Approved at: ${_friendlyDate(_stripe?['onboarded_at']?.toString())}',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Color(0xFF374151),
+                  ),
+                ),
+              ),
+            if (_stripeDisabledReason != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF2F2),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFFECACA)),
+                ),
+                child: Text(
+                  _stripeDisabledReason!,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Color(0xFF991B1B),
+                  ),
+                ),
+              ),
+            ],
+            if (_stripeRequirementsCurrentlyDue.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              const Text(
+                'Stripe requirements still due',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF111827),
+                ),
+              ),
+              const SizedBox(height: 8),
+              ..._stripeRequirementsCurrentlyDue.map(
+                (item) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.only(top: 3),
+                        child: Icon(
+                          Icons.circle,
+                          size: 8,
+                          color: Color(0xFF6B7280),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          item,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Color(0xFF374151),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ],
         ],
       ),
+    );
+  }
+
+  Widget _buildFlagRow(String label, bool done) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        children: [
+          Icon(
+            done ? Icons.check_circle : Icons.radio_button_unchecked,
+            size: 20,
+            color: done ? Colors.green : const Color(0xFF9CA3AF),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 14, color: Color(0xFF111827)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReviewFeedbackCard(AdminTenantReviewDetail detail) {
+    final issues = detail.reviewIssues;
+    final hasContent =
+        (detail.rejectionReason?.trim().isNotEmpty ?? false) ||
+        (detail.reviewNotes?.trim().isNotEmpty ?? false) ||
+        issues.isNotEmpty;
+
+    if (!hasContent) {
+      return const SizedBox.shrink();
+    }
+
+    return _buildSectionCard(
+      title: 'Review feedback',
+      rows: [
+        _DetailRow('Rejection reason', _value(detail.rejectionReason)),
+        _DetailRow('Review notes', _value(detail.reviewNotes)),
+        _DetailRow(
+          'Review issues',
+          issues.isEmpty ? '—' : issues.map(_prettyLabel).join(', '),
+        ),
+      ],
     );
   }
 
@@ -563,8 +728,6 @@ class _AdminTenantReviewScreenState extends State<AdminTenantReviewScreen> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    _buildDocumentsCard(detail.documents),
-                    const SizedBox(height: 16),
                     _buildSectionCard(
                       title: 'Catalog',
                       rows: [
@@ -581,52 +744,13 @@ class _AdminTenantReviewScreenState extends State<AdminTenantReviewScreen> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    _buildSectionCard(
-                      title: 'Payouts',
-                      rows: [
-                        _DetailRow(
-                          'Provider',
-                          _value(detail.payouts?['provider']),
-                        ),
-                        _DetailRow(
-                          'Setup complete',
-                          detail.payouts?['setup_complete'] == true
-                              ? 'Yes'
-                              : 'No',
-                        ),
-                        _DetailRow(
-                          'Account reference',
-                          _value(detail.payouts?['account_reference']),
-                        ),
-                      ],
-                    ),
+                    _buildStripeApprovalCard(),
+                    const SizedBox(height: 16),
+                    _buildReviewFeedbackCard(detail),
                     if ((detail.rejectionReason?.trim().isNotEmpty ?? false) ||
                         (detail.reviewNotes?.trim().isNotEmpty ?? false) ||
-                        detail.reviewIssues.isNotEmpty) ...[
+                        detail.reviewIssues.isNotEmpty)
                       const SizedBox(height: 16),
-                      _buildSectionCard(
-                        title: 'Review feedback',
-                        rows: [
-                          _DetailRow(
-                            'Rejection reason',
-                            _value(detail.rejectionReason),
-                          ),
-                          _DetailRow(
-                            'Review notes',
-                            _value(detail.reviewNotes),
-                          ),
-                          _DetailRow(
-                            'Review issues',
-                            detail.reviewIssues.isEmpty
-                                ? '—'
-                                : detail.reviewIssues
-                                      .map(_prettyLabel)
-                                      .join(', '),
-                          ),
-                        ],
-                      ),
-                    ],
-                    const SizedBox(height: 16),
                   ],
                   AdminTenantReviewCard(
                     tenantId: widget.tenantId,

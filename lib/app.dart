@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'core/api/api_client.dart';
 import 'core/theme/app_theme.dart';
 import 'features/admin/screens/admin_tenant_review_screen.dart';
 import 'features/auth/screens/customer_login_screen.dart';
@@ -32,6 +33,7 @@ import 'features/tenant/screens/seller_register_screen.dart';
 import 'features/tenant/screens/seller_rejected_screen.dart';
 import 'features/tenant/screens/seller_review_screen.dart';
 import 'features/tenant/screens/seller_store_profile_screen.dart';
+import 'features/tenant/screens/seller_store_selector_screen.dart';
 import 'features/tenant/screens/seller_welcome_screen.dart';
 import 'features/tenant/screens/tenant_selector.dart';
 import 'features/tenant/screens/tenant_shell_screen.dart';
@@ -52,6 +54,7 @@ class TeesamsMarketApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        Provider<ApiClient>(create: (_) => ApiClient.create()),
         ChangeNotifierProvider<AuthProvider>(create: (_) => AuthProvider()),
         ChangeNotifierProvider<TenantProvider>(
           create: (_) => TenantProvider()..loadTenant(),
@@ -113,15 +116,15 @@ class TeesamsMarketApp extends StatelessWidget {
           '/mode-picker': (_) => const ModePickerScreen(),
           '/tenant-selector': (_) => const TenantSelector(),
           '/tenant-shell': (_) => const TenantShellScreen(),
+          '/seller/portal': (_) => const TenantShellScreen(),
+          '/seller/store-selector': (_) => const SellerStoreSelectorScreen(),
+
           '/cart': (_) => const CartScreen(),
           '/checkout': (_) => const CheckoutScreen(),
           '/order-success': (_) => const OrderSuccessScreen(),
 
-          // Legacy aliases
           '/login': (_) => const CustomerLoginScreen(),
           '/register': (_) => const RegisterScreen(),
-
-          // Explicit customer routes
           '/customer/login': (_) => const CustomerLoginScreen(),
           '/customer/register': (_) => const RegisterScreen(),
 
@@ -139,7 +142,6 @@ class TeesamsMarketApp extends StatelessWidget {
             return MyOrdersScreen(tenantSlug: tenant?.slug ?? '');
           },
 
-          // Seller flow
           '/seller/welcome': (_) => const SellerWelcomeScreen(),
           '/seller/login': (_) => const SellerLoginScreen(),
           '/seller/register': (_) => const SellerRegisterScreen(),
@@ -203,32 +205,74 @@ class _AppEntry extends StatefulWidget {
 
 class _AppEntryState extends State<_AppEntry> {
   String? _lastTenantSlug;
+  String? _lastAppliedAuthToken;
   bool _didInit = false;
+
+  String? _normalizedSellerTenantSlug(SellerAuthProvider sellerAuthProvider) {
+    final raw = sellerAuthProvider.tenant?['slug'];
+    final slug = raw?.toString().trim();
+    if (slug == null || slug.isEmpty) return null;
+    return slug;
+  }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
 
+    final apiClient = context.read<ApiClient>();
     final tenantProvider = context.watch<TenantProvider>();
     final catalogProvider = context.read<CatalogProvider>();
-    final authProvider = context.read<AuthProvider>();
-    final sellerAuthProvider = context.read<SellerAuthProvider>();
+    final authProvider = context.watch<AuthProvider>();
+    final sellerAuthProvider = context.watch<SellerAuthProvider>();
     final sellerOnboardingProvider = context.read<SellerOnboardingProvider>();
-    final tenantModeProvider = context.read<TenantModeProvider>();
+    final tenantModeProvider = context.watch<TenantModeProvider>();
     final appSessionProvider = context.read<AppSessionProvider>();
-    final tenant = tenantProvider.tenant;
 
-    if (tenant != null && tenant.slug != _lastTenantSlug) {
-      _lastTenantSlug = tenant.slug;
+    final storefrontTenant = tenantProvider.tenant;
+    final storefrontTenantSlug = storefrontTenant?.slug;
+    final sellerTenantSlug = _normalizedSellerTenantSlug(sellerAuthProvider);
 
+    final activeTenantSlug =
+        (sellerAuthProvider.isAuthenticated &&
+            sellerTenantSlug != null &&
+            sellerTenantSlug.isNotEmpty)
+        ? sellerTenantSlug
+        : (storefrontTenantSlug ?? '');
+
+    final sellerToken = sellerAuthProvider.token;
+    final customerToken = authProvider.token;
+
+    final effectiveToken =
+        (sellerToken != null && sellerToken.trim().isNotEmpty)
+        ? sellerToken
+        : (customerToken != null && customerToken.trim().isNotEmpty)
+        ? customerToken
+        : null;
+
+    final tenantChanged =
+        activeTenantSlug.isNotEmpty && activeTenantSlug != _lastTenantSlug;
+    final tokenChanged = effectiveToken != _lastAppliedAuthToken;
+
+    if (activeTenantSlug.isNotEmpty &&
+        (tenantChanged || tokenChanged || !_didInit)) {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         if (!mounted) return;
 
-        await catalogProvider.loadCatalogForTenant(tenant.slug);
+        await apiClient.setTenantSlug(activeTenantSlug);
+
+        if (effectiveToken != null && effectiveToken.trim().isNotEmpty) {
+          await apiClient.setAuthToken(effectiveToken);
+        } else {
+          await apiClient.clearAuthToken();
+        }
+
+        _lastTenantSlug = activeTenantSlug;
+        _lastAppliedAuthToken = effectiveToken;
+
         if (!mounted) return;
 
         await appSessionProvider.initialize(
-          tenantSlug: tenant.slug,
+          tenantSlug: activeTenantSlug,
           authProvider: authProvider,
           sellerAuthProvider: sellerAuthProvider,
           sellerOnboardingProvider: sellerOnboardingProvider,
@@ -237,8 +281,14 @@ class _AppEntryState extends State<_AppEntry> {
 
         if (!mounted) return;
 
+        if (!sellerAuthProvider.isAuthenticated) {
+          await catalogProvider.loadCatalogForTenant(activeTenantSlug);
+          if (!mounted) return;
+        }
+
         await _resolveInitialMode(
           authProvider: authProvider,
+          sellerAuthProvider: sellerAuthProvider,
           tenantModeProvider: tenantModeProvider,
         );
 
@@ -253,12 +303,26 @@ class _AppEntryState extends State<_AppEntry> {
 
   Future<void> _resolveInitialMode({
     required AuthProvider authProvider,
+    required SellerAuthProvider sellerAuthProvider,
     required TenantModeProvider tenantModeProvider,
   }) async {
     final bootstrap = tenantModeProvider.bootstrap;
-    if (!authProvider.isAuthenticated || bootstrap == null) return;
+    final hasAnyAuth =
+        authProvider.isAuthenticated || sellerAuthProvider.isAuthenticated;
 
-    if (bootstrap.hasTenantMode) {
+    if (!hasAnyAuth || bootstrap == null) return;
+
+    if (sellerAuthProvider.isAuthenticated) {
+      if (tenantModeProvider.selectedMembership != null) {
+        if (tenantModeProvider.selectedMode != 'tenant') {
+          await tenantModeProvider.setSelectedMode('tenant');
+        }
+      }
+      return;
+    }
+
+    if (bootstrap.hasTenantMode &&
+        tenantModeProvider.selectedMembership != null) {
       if (tenantModeProvider.selectedMode != 'tenant') {
         await tenantModeProvider.setSelectedMode('tenant');
       }
@@ -281,6 +345,7 @@ class _AppEntryState extends State<_AppEntry> {
   Widget build(BuildContext context) {
     final tenantProvider = context.watch<TenantProvider>();
     final authProvider = context.watch<AuthProvider>();
+    final sellerAuthProvider = context.watch<SellerAuthProvider>();
     final tenantModeProvider = context.watch<TenantModeProvider>();
     final appSessionProvider = context.watch<AppSessionProvider>();
 
@@ -315,6 +380,7 @@ class _AppEntryState extends State<_AppEntry> {
                     setState(() {
                       _didInit = false;
                       _lastTenantSlug = null;
+                      _lastAppliedAuthToken = null;
                     });
                     context.read<AppSessionProvider>().reset();
                     tenantProvider.loadTenant();
@@ -328,8 +394,68 @@ class _AppEntryState extends State<_AppEntry> {
       );
     }
 
+    if (sellerAuthProvider.isAuthenticated) {
+      if (tenantModeProvider.error != null &&
+          tenantModeProvider.error!.trim().isNotEmpty &&
+          tenantModeProvider.selectedMembership == null) {
+        return Scaffold(
+          body: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.lock_outline, size: 52),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Unable to open seller portal',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      tenantModeProvider.error!,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    FilledButton(
+                      onPressed: () async {
+                        setState(() {
+                          _didInit = false;
+                          _lastTenantSlug = null;
+                          _lastAppliedAuthToken = null;
+                        });
+                      },
+                      child: const Text('Try again'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+
+      if (tenantModeProvider.selectedMembership != null &&
+          tenantModeProvider.isTenantMode) {
+        return const TenantShellScreen();
+      }
+
+      final memberships =
+          tenantModeProvider.bootstrap?.tenantMemberships ?? const [];
+      if (memberships.length > 1 &&
+          tenantModeProvider.selectedMembership == null) {
+        return const SellerStoreSelectorScreen();
+      }
+    }
+
     if (authProvider.isAuthenticated &&
         tenantModeProvider.bootstrap != null &&
+        tenantModeProvider.selectedMembership != null &&
         tenantModeProvider.isTenantMode) {
       return const TenantShellScreen();
     }

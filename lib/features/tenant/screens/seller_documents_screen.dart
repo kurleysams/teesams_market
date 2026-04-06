@@ -59,7 +59,7 @@ class _SellerDocumentsScreenState extends State<SellerDocumentsScreen> {
 
     final ok = await provider.uploadDocument(
       UploadSellerDocumentRequest(
-        documentType: documentType,
+        type: documentType,
         filePath: filePath,
         fileName: fileName,
       ),
@@ -75,6 +75,10 @@ class _SellerDocumentsScreenState extends State<SellerDocumentsScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('$label uploaded')));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(provider.error ?? 'Unable to upload $label')),
+      );
     }
   }
 
@@ -173,6 +177,7 @@ class _SellerDocumentsScreenState extends State<SellerDocumentsScreen> {
       case 'proof_of_address':
         return 'Upload a recent document showing your address.';
       case 'owner_id':
+      case 'proof_of_identity':
         return 'Upload a valid identification document.';
       default:
         return 'Upload the required file.';

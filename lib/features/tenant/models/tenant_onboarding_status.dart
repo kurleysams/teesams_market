@@ -19,6 +19,7 @@ class OnboardingStatus {
   final SellerDocumentsSummary? documents;
   final CatalogDetails? catalog;
   final PayoutDetails? payouts;
+  final OperationsDetails? operations;
 
   OnboardingStatus({
     required this.tenantId,
@@ -39,6 +40,7 @@ class OnboardingStatus {
     required this.documents,
     required this.catalog,
     required this.payouts,
+    required this.operations,
   });
 
   bool get isPendingReview => status == 'pending_review';
@@ -51,7 +53,7 @@ class OnboardingStatus {
     final data = json['data'] as Map<String, dynamic>;
 
     return OnboardingStatus(
-      tenantId: data['tenant_id'] as int,
+      tenantId: (data['tenant_id'] as num).toInt(),
       status: data['status'] as String,
       verificationStatus: data['verification_status'] as String,
       isActive: data['is_active'] as bool,
@@ -84,6 +86,11 @@ class OnboardingStatus {
           : null,
       payouts: data['payouts'] != null
           ? PayoutDetails.fromJson(data['payouts'] as Map<String, dynamic>)
+          : null,
+      operations: data['operations'] != null
+          ? OperationsDetails.fromJson(
+              data['operations'] as Map<String, dynamic>,
+            )
           : null,
     );
   }
@@ -186,14 +193,13 @@ class SellerDocumentsSummary {
 
   factory SellerDocumentsSummary.fromJson(Map<String, dynamic> json) {
     return SellerDocumentsSummary(
-      requiredDocuments: ((json['required'] as List<dynamic>? ?? const []))
+      requiredDocuments: ((json['required'] as List<dynamic>?) ?? const [])
           .map((e) => SellerDocumentItem.fromJson(e as Map<String, dynamic>))
           .toList(),
     );
   }
 
   int get uploadedCount => requiredDocuments.where((e) => e.uploaded).length;
-
   int get totalCount => requiredDocuments.length;
 }
 
@@ -234,7 +240,7 @@ class CatalogDetails {
 
   factory CatalogDetails.fromJson(Map<String, dynamic> json) {
     return CatalogDetails(
-      productCount: json['product_count'] as int?,
+      productCount: (json['product_count'] as num?)?.toInt(),
       readyForReview: json['ready_for_review'] as bool? ?? false,
     );
   }
@@ -244,11 +250,13 @@ class PayoutDetails {
   final String? provider;
   final bool setupComplete;
   final String? accountReference;
+  final StripePayoutDetails? stripe;
 
   PayoutDetails({
     this.provider,
     required this.setupComplete,
     this.accountReference,
+    this.stripe,
   });
 
   factory PayoutDetails.fromJson(Map<String, dynamic> json) {
@@ -256,6 +264,90 @@ class PayoutDetails {
       provider: json['provider'] as String?,
       setupComplete: json['setup_complete'] as bool? ?? false,
       accountReference: json['account_reference'] as String?,
+      stripe: json['stripe'] != null
+          ? StripePayoutDetails.fromJson(json['stripe'] as Map<String, dynamic>)
+          : null,
+    );
+  }
+}
+
+class StripePayoutDetails {
+  final bool hasAccount;
+  final String? accountId;
+  final String? accountType;
+  final bool detailsSubmitted;
+  final bool chargesEnabled;
+  final bool payoutsEnabled;
+  final String? onboardingStatus;
+  final List<String> requirementsCurrentlyDue;
+  final List<String> requirementsEventuallyDue;
+  final String? requirementsDisabledReason;
+  final String? onboardedAt;
+
+  StripePayoutDetails({
+    required this.hasAccount,
+    this.accountId,
+    this.accountType,
+    required this.detailsSubmitted,
+    required this.chargesEnabled,
+    required this.payoutsEnabled,
+    this.onboardingStatus,
+    required this.requirementsCurrentlyDue,
+    required this.requirementsEventuallyDue,
+    this.requirementsDisabledReason,
+    this.onboardedAt,
+  });
+
+  bool get isReady => hasAccount && chargesEnabled && payoutsEnabled;
+
+  bool get isPending => hasAccount && !isReady;
+
+  factory StripePayoutDetails.fromJson(Map<String, dynamic> json) {
+    return StripePayoutDetails(
+      hasAccount: json['has_account'] as bool? ?? false,
+      accountId: json['account_id'] as String?,
+      accountType: json['account_type'] as String?,
+      detailsSubmitted: json['details_submitted'] as bool? ?? false,
+      chargesEnabled: json['charges_enabled'] as bool? ?? false,
+      payoutsEnabled: json['payouts_enabled'] as bool? ?? false,
+      onboardingStatus: json['onboarding_status'] as String?,
+      requirementsCurrentlyDue:
+          ((json['requirements_currently_due'] as List<dynamic>?) ?? const [])
+              .map((e) => e.toString())
+              .toList(),
+      requirementsEventuallyDue:
+          ((json['requirements_eventually_due'] as List<dynamic>?) ?? const [])
+              .map((e) => e.toString())
+              .toList(),
+      requirementsDisabledReason:
+          json['requirements_disabled_reason'] as String?,
+      onboardedAt: json['onboarded_at'] as String?,
+    );
+  }
+}
+
+class OperationsDetails {
+  final bool supportsDelivery;
+  final bool supportsPickup;
+  final String? pickupAddress;
+  final List<dynamic> openingHours;
+  final String? deliveryNotes;
+
+  OperationsDetails({
+    required this.supportsDelivery,
+    required this.supportsPickup,
+    this.pickupAddress,
+    required this.openingHours,
+    this.deliveryNotes,
+  });
+
+  factory OperationsDetails.fromJson(Map<String, dynamic> json) {
+    return OperationsDetails(
+      supportsDelivery: json['supports_delivery'] as bool? ?? false,
+      supportsPickup: json['supports_pickup'] as bool? ?? false,
+      pickupAddress: json['pickup_address'] as String?,
+      openingHours: (json['opening_hours'] as List<dynamic>?) ?? const [],
+      deliveryNotes: json['delivery_notes'] as String?,
     );
   }
 }

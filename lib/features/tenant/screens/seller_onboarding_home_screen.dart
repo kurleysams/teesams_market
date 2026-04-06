@@ -13,11 +13,38 @@ class SellerOnboardingHomeScreen extends StatefulWidget {
 
 class _SellerOnboardingHomeScreenState
     extends State<SellerOnboardingHomeScreen> {
+  bool _confirmTerms = false;
+  bool _redirecting = false;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await context.read<SellerOnboardingProvider>().loadStatus();
+      _maybeRedirectApprovedSeller();
+    });
+  }
+
+  void _maybeRedirectApprovedSeller() {
+    if (_redirecting || !mounted) return;
+
+    final status = context.read<SellerOnboardingProvider>().status;
+    if (status == null) return;
+
+    final canEnterSellerPortal =
+        status.status == 'approved' || status.status == 'active';
+
+    if (!canEnterSellerPortal) return;
+
+    _redirecting = true;
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<SellerOnboardingProvider>().loadStatus();
+      if (!mounted) return;
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        '/seller/portal',
+        (route) => false,
+      );
     });
   }
 
@@ -44,6 +71,15 @@ class _SellerOnboardingHomeScreenState
       default:
         Navigator.pushNamed(context, '/seller/onboarding/review');
     }
+  }
+
+  String _prettyStatus(String value) {
+    return value
+        .replaceAll('_', ' ')
+        .split(' ')
+        .where((e) => e.trim().isNotEmpty)
+        .map((word) => word[0].toUpperCase() + word.substring(1))
+        .join(' ');
   }
 
   String _stepSummary(SellerOnboardingProvider provider, String key) {
@@ -73,16 +109,18 @@ class _SellerOnboardingHomeScreenState
         return 'Set your store name, slug, and location';
 
       case 'operations':
-        final address = status.store.addressLine1?.trim();
-        if (address != null && address.isNotEmpty) {
-          return address;
+        final pickupAddress =
+            status.operations?.pickupAddress?.trim() ??
+            status.store.addressLine1?.trim();
+        if (pickupAddress != null && pickupAddress.isNotEmpty) {
+          return pickupAddress;
         }
         return 'Choose delivery and pickup options';
 
       case 'documents':
         final docs = status.documents;
         if (docs == null || docs.totalCount == 0) {
-          return 'Upload required verification files';
+          return 'No documents required';
         }
         return '${docs.uploadedCount}/${docs.totalCount} uploaded';
 
@@ -100,18 +138,49 @@ class _SellerOnboardingHomeScreenState
 
       case 'payout_setup':
         final payouts = status.payouts;
-        if (payouts == null) {
-          return 'Choose payout provider';
+        final stripe = payouts?.stripe;
+
+        if (stripe == null) {
+          return 'Connect your Stripe account';
         }
-        final providerName = payouts.provider?.trim();
-        final ready = payouts.setupComplete ? 'Complete' : 'Incomplete';
-        if (providerName != null && providerName.isNotEmpty) {
-          return '$providerName • $ready';
+
+        if (stripe.isReady) {
+          return 'Stripe • Complete';
         }
-        return ready;
+
+        if (stripe.hasAccount) {
+          return 'Stripe • Action needed';
+        }
+
+        return 'Stripe • Not connected';
 
       default:
         return '';
+    }
+  }
+
+  Future<void> _submitForReview() async {
+    final provider = context.read<SellerOnboardingProvider>();
+
+    if (!_confirmTerms) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please confirm your details before submitting.'),
+        ),
+      );
+      return;
+    }
+
+    final ok = await provider.submitForReview(confirmTerms: _confirmTerms);
+
+    if (!mounted) return;
+
+    if (ok) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Submitted for review')));
+      await provider.loadStatus();
+      _maybeRedirectApprovedSeller();
     }
   }
 
@@ -121,13 +190,20 @@ class _SellerOnboardingHomeScreenState
       builder: (context, provider, _) {
         final status = provider.status;
 
+        if (status != null) {
+          _maybeRedirectApprovedSeller();
+        }
+
         return Scaffold(
           backgroundColor: const Color(0xFFF8FAFC),
           appBar: AppBar(title: const Text('Store onboarding')),
           body: provider.isLoading && status == null
               ? const Center(child: CircularProgressIndicator())
               : RefreshIndicator(
-                  onRefresh: provider.loadStatus,
+                  onRefresh: () async {
+                    await provider.loadStatus();
+                    _maybeRedirectApprovedSeller();
+                  },
                   child: ListView(
                     padding: const EdgeInsets.all(16),
                     children: [
@@ -153,7 +229,7 @@ class _SellerOnboardingHomeScreenState
                             Text(
                               status == null
                                   ? 'Load your onboarding checklist.'
-                                  : 'Status: ${status.status}',
+                                  : 'Status: ${_prettyStatus(status.status)}',
                               style: const TextStyle(
                                 fontSize: 14,
                                 color: Color(0xFF6B7280),
@@ -228,25 +304,47 @@ class _SellerOnboardingHomeScreenState
                           ),
                         ),
                         const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(color: const Color(0xFFE5E7EB)),
+                          ),
+                          child: CheckboxListTile(
+                            value: _confirmTerms,
+                            onChanged:
+                                provider.isLoading || !status.canSubmitForReview
+                                ? null
+                                : (value) {
+                                    setState(() {
+                                      _confirmTerms = value ?? false;
+                                    });
+                                  },
+                            contentPadding: EdgeInsets.zero,
+                            controlAffinity: ListTileControlAffinity.leading,
+                            title: const Text(
+                              'I confirm these details are correct and ready for review',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF111827),
+                              ),
+                            ),
+                            subtitle: const Text(
+                              'By submitting, you confirm your store information is accurate and Stripe setup is complete.',
+                              style: TextStyle(
+                                color: Color(0xFF6B7280),
+                                height: 1.4,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
                         SizedBox(
                           height: 50,
                           child: OutlinedButton(
                             onPressed: status.canSubmitForReview
-                                ? () async {
-                                    final ok = await provider.submitForReview();
-                                    if (!context.mounted) return;
-
-                                    if (ok) {
-                                      ScaffoldMessenger.of(
-                                        context,
-                                      ).showSnackBar(
-                                        const SnackBar(
-                                          content: Text('Submitted for review'),
-                                        ),
-                                      );
-                                      await provider.loadStatus();
-                                    }
-                                  }
+                                ? (_confirmTerms ? _submitForReview : null)
                                 : () {
                                     Navigator.pushNamed(
                                       context,

@@ -1,14 +1,31 @@
-import 'package:dio/dio.dart';
-
 import '../../../core/api/api_client.dart';
 import '../../../core/api/endpoints.dart';
 import '../models/tenant_onboarding_status.dart';
 import '../models/tenant_save_business_details.dart';
 import '../models/tenant_save_catalog_setup.dart';
 import '../models/tenant_save_operations.dart';
-import '../models/tenant_save_payouts.dart';
 import '../models/tenant_save_store_profile.dart';
 import '../models/tenant_upload_document.dart';
+
+class SellerStripeConnectResult {
+  final String? url;
+  final int? expiresAt;
+  final OnboardingStatus status;
+
+  const SellerStripeConnectResult({
+    required this.url,
+    required this.expiresAt,
+    required this.status,
+  });
+
+  factory SellerStripeConnectResult.fromJson(Map<String, dynamic> json) {
+    return SellerStripeConnectResult(
+      url: json['url']?.toString(),
+      expiresAt: (json['expires_at'] as num?)?.toInt(),
+      status: OnboardingStatus.fromApiResponse(json),
+    );
+  }
+}
 
 class SellerOnboardingRepository {
   final ApiClient apiClient;
@@ -17,7 +34,52 @@ class SellerOnboardingRepository {
 
   Future<OnboardingStatus> getStatus() async {
     final response = await apiClient.dio.get(Endpoints.sellerOnboardingStatus);
-    return OnboardingStatus.fromApiResponse(response.data);
+    final data = response.data;
+
+    if (data is! Map<String, dynamic> || data['data'] is! Map) {
+      throw Exception('Invalid onboarding status response');
+    }
+
+    return OnboardingStatus.fromApiResponse(data);
+  }
+
+  Future<OnboardingStatus> getStripeStatus() async {
+    final response = await apiClient.dio.get(Endpoints.sellerStripeStatus);
+    final data = response.data;
+
+    if (data is! Map<String, dynamic> || data['data'] is! Map) {
+      throw Exception('Invalid Stripe status response');
+    }
+
+    return OnboardingStatus.fromApiResponse(data);
+  }
+
+  Future<SellerStripeConnectResult> connectStripe() async {
+    final response = await apiClient.dio.post(
+      Endpoints.sellerStripeConnect,
+      data: const <String, dynamic>{},
+    );
+
+    final data = response.data;
+    if (data is! Map<String, dynamic> || data['data'] is! Map) {
+      throw Exception('Invalid Stripe connect response');
+    }
+
+    return SellerStripeConnectResult.fromJson(data);
+  }
+
+  Future<OnboardingStatus> refreshStripe() async {
+    final response = await apiClient.dio.post(
+      Endpoints.sellerStripeRefresh,
+      data: const <String, dynamic>{},
+    );
+
+    final data = response.data;
+    if (data is! Map<String, dynamic> || data['data'] is! Map) {
+      throw Exception('Invalid Stripe refresh response');
+    }
+
+    return OnboardingStatus.fromApiResponse(data);
   }
 
   Future<OnboardingStatus> saveBusinessDetails(
@@ -28,7 +90,12 @@ class SellerOnboardingRepository {
       data: request.toJson(),
     );
 
-    return OnboardingStatus.fromApiResponse(response.data);
+    final data = response.data;
+    if (data is! Map<String, dynamic> || data['data'] is! Map) {
+      throw Exception('Invalid business details response');
+    }
+
+    return OnboardingStatus.fromApiResponse(data);
   }
 
   Future<OnboardingStatus> saveStoreProfile(
@@ -39,7 +106,12 @@ class SellerOnboardingRepository {
       data: request.toJson(),
     );
 
-    return OnboardingStatus.fromApiResponse(response.data);
+    final data = response.data;
+    if (data is! Map<String, dynamic> || data['data'] is! Map) {
+      throw Exception('Invalid store profile response');
+    }
+
+    return OnboardingStatus.fromApiResponse(data);
   }
 
   Future<OnboardingStatus> saveOperations(SaveOperationsRequest request) async {
@@ -48,16 +120,12 @@ class SellerOnboardingRepository {
       data: request.toJson(),
     );
 
-    return OnboardingStatus.fromApiResponse(response.data);
-  }
+    final data = response.data;
+    if (data is! Map<String, dynamic> || data['data'] is! Map) {
+      throw Exception('Invalid operations response');
+    }
 
-  Future<OnboardingStatus> savePayouts(SavePayoutsRequest request) async {
-    final response = await apiClient.dio.patch(
-      Endpoints.sellerPayoutSetup,
-      data: request.toJson(),
-    );
-
-    return OnboardingStatus.fromApiResponse(response.data);
+    return OnboardingStatus.fromApiResponse(data);
   }
 
   Future<OnboardingStatus> saveCatalogSetup(
@@ -68,35 +136,43 @@ class SellerOnboardingRepository {
       data: request.toJson(),
     );
 
-    return OnboardingStatus.fromApiResponse(response.data);
+    final data = response.data;
+    if (data is! Map<String, dynamic> || data['data'] is! Map) {
+      throw Exception('Invalid catalog setup response');
+    }
+
+    return OnboardingStatus.fromApiResponse(data);
   }
 
   Future<OnboardingStatus> uploadDocument(
     UploadSellerDocumentRequest request,
   ) async {
-    final formData = FormData.fromMap({
-      'document_type': request.documentType,
-      'file': await MultipartFile.fromFile(
-        request.filePath,
-        filename: request.fileName,
-      ),
-    });
+    final formData = await request.toFormData();
 
     final response = await apiClient.dio.post(
       Endpoints.sellerDocuments,
       data: formData,
-      options: Options(contentType: 'multipart/form-data'),
     );
 
-    return OnboardingStatus.fromApiResponse(response.data);
+    final data = response.data;
+    if (data is! Map<String, dynamic> || data['data'] is! Map) {
+      throw Exception('Invalid document upload response');
+    }
+
+    return OnboardingStatus.fromApiResponse(data);
   }
 
-  Future<OnboardingStatus> submitForReview() async {
+  Future<OnboardingStatus> submitForReview({required bool confirmTerms}) async {
     final response = await apiClient.dio.post(
       Endpoints.sellerSubmitForReview,
-      data: {'confirm_terms': true},
+      data: {'confirm_terms': confirmTerms},
     );
 
-    return OnboardingStatus.fromApiResponse(response.data);
+    final data = response.data;
+    if (data is! Map<String, dynamic> || data['data'] is! Map) {
+      throw Exception('Invalid submit for review response');
+    }
+
+    return OnboardingStatus.fromApiResponse(data);
   }
 }

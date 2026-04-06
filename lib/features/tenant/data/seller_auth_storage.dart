@@ -1,3 +1,5 @@
+// lib/features/tenant/data/seller_auth_storage.dart
+
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SellerAuthStorage {

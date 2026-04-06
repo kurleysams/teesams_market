@@ -413,7 +413,9 @@ class SellerReviewScreen extends StatelessWidget {
                                 ? null
                                 : status.canSubmitForReview
                                 ? () async {
-                                    final ok = await provider.submitForReview();
+                                    final ok = await provider.submitForReview(
+                                      confirmTerms: true,
+                                    );
                                     if (!context.mounted) return;
 
                                     if (ok) {

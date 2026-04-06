@@ -1,10 +1,11 @@
 // lib/features/tenant/screens/tenant_store_screen.dart
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../auth/state/auth_provider.dart';
 import '../models/tenant_product_availability.dart';
+import '../state/seller_auth_provider.dart';
 import '../state/tenant_mode_provider.dart';
 import '../state/tenant_product_provider.dart';
 import '../state/tenant_provider.dart';
@@ -23,10 +24,33 @@ class TenantStoreScreen extends StatefulWidget {
 
 class _TenantStoreScreenState extends State<TenantStoreScreen> {
   final TextEditingController _searchController = TextEditingController();
-  bool _didLoad = false;
 
+  bool _didLoad = false;
   final Set<int> _expandedCategoryIds = <int>{};
   final Set<int> _expandedProductIds = <int>{};
+
+  String? _activeSellerTenantSlug() {
+    final sellerAuth = context.read<SellerAuthProvider>();
+    final sellerSlug = sellerAuth.tenant?['slug']?.toString().trim();
+    if (sellerSlug != null && sellerSlug.isNotEmpty) {
+      return sellerSlug;
+    }
+
+    final storefrontSlug = context.read<TenantProvider>().tenant?.slug?.trim();
+    if (storefrontSlug != null && storefrontSlug.isNotEmpty) {
+      return storefrontSlug;
+    }
+
+    return null;
+  }
+
+  String? _activeSellerToken() {
+    final token = context.read<SellerAuthProvider>().token?.trim();
+    if (token != null && token.isNotEmpty) {
+      return token;
+    }
+    return null;
+  }
 
   @override
   void dispose() {
@@ -113,24 +137,25 @@ class _TenantStoreScreenState extends State<TenantStoreScreen> {
   }
 
   Future<void> _loadAll() async {
-    final tenantSlug = context.read<TenantProvider>().tenant?.slug ?? '';
-    final auth = context.read<AuthProvider>();
+    final tenantSlug = _activeSellerTenantSlug() ?? '';
+    final authToken = _activeSellerToken();
     final productProvider = context.read<TenantProductProvider>();
 
-    if (tenantSlug.isEmpty || auth.token == null) return;
+    if (tenantSlug.isEmpty || authToken == null) return;
 
     await Future.wait([
       context.read<TenantStoreProvider>().loadStore(
         tenantSlug: tenantSlug,
-        authToken: auth.token!,
+        authToken: authToken,
       ),
       productProvider.loadProducts(
         tenantSlug: tenantSlug,
-        authToken: auth.token!,
+        authToken: authToken,
       ),
     ]);
 
     if (!mounted) return;
+
     setState(() {
       _syncExpandedState(productProvider.groups);
     });
@@ -172,17 +197,16 @@ class _TenantStoreScreenState extends State<TenantStoreScreen> {
   }
 
   Future<void> _toggleStore(bool value) async {
-    final tenantSlug = context.read<TenantProvider>().tenant?.slug ?? '';
-    final auth = context.read<AuthProvider>();
-
-    if (tenantSlug.isEmpty || auth.token == null) return;
+    final tenantSlug = _activeSellerTenantSlug() ?? '';
+    final authToken = _activeSellerToken();
+    if (tenantSlug.isEmpty || authToken == null) return;
 
     final storeProvider = context.read<TenantStoreProvider>();
     final productProvider = context.read<TenantProductProvider>();
 
     final ok = await storeProvider.updateStatus(
       tenantSlug: tenantSlug,
-      authToken: auth.token!,
+      authToken: authToken,
       isOpen: value,
     );
 
@@ -198,10 +222,10 @@ class _TenantStoreScreenState extends State<TenantStoreScreen> {
     }
 
     await Future.wait([
-      storeProvider.loadStore(tenantSlug: tenantSlug, authToken: auth.token!),
+      storeProvider.loadStore(tenantSlug: tenantSlug, authToken: authToken),
       productProvider.loadProducts(
         tenantSlug: tenantSlug,
-        authToken: auth.token!,
+        authToken: authToken,
         categoryId: productProvider.selectedCategoryId,
         search: productProvider.search,
       ),
@@ -224,16 +248,15 @@ class _TenantStoreScreenState extends State<TenantStoreScreen> {
   }
 
   Future<void> _toggleVariant(int variantId, bool value) async {
-    final tenantSlug = context.read<TenantProvider>().tenant?.slug ?? '';
-    final auth = context.read<AuthProvider>();
-
-    if (tenantSlug.isEmpty || auth.token == null) return;
+    final tenantSlug = _activeSellerTenantSlug() ?? '';
+    final authToken = _activeSellerToken();
+    if (tenantSlug.isEmpty || authToken == null) return;
 
     final provider = context.read<TenantProductProvider>();
 
     final ok = await provider.updateAvailability(
       tenantSlug: tenantSlug,
-      authToken: auth.token!,
+      authToken: authToken,
       variantId: variantId,
       isAvailable: value,
     );
@@ -260,15 +283,15 @@ class _TenantStoreScreenState extends State<TenantStoreScreen> {
 
     if (!confirmed || !mounted) return;
 
-    final tenantSlug = context.read<TenantProvider>().tenant?.slug ?? '';
-    final auth = context.read<AuthProvider>();
+    final tenantSlug = _activeSellerTenantSlug() ?? '';
+    final authToken = _activeSellerToken();
     final provider = context.read<TenantProductProvider>();
 
-    if (tenantSlug.isEmpty || auth.token == null) return;
+    if (tenantSlug.isEmpty || authToken == null) return;
 
     final ok = await provider.bulkUpdateProductAvailability(
       tenantSlug: tenantSlug,
-      authToken: auth.token!,
+      authToken: authToken,
       productId: product.id,
       isAvailable: isAvailable,
     );
@@ -307,15 +330,15 @@ class _TenantStoreScreenState extends State<TenantStoreScreen> {
 
     if (!confirmed || !mounted) return;
 
-    final tenantSlug = context.read<TenantProvider>().tenant?.slug ?? '';
-    final auth = context.read<AuthProvider>();
+    final tenantSlug = _activeSellerTenantSlug() ?? '';
+    final authToken = _activeSellerToken();
     final provider = context.read<TenantProductProvider>();
 
-    if (tenantSlug.isEmpty || auth.token == null) return;
+    if (tenantSlug.isEmpty || authToken == null) return;
 
     final ok = await provider.bulkUpdateCategoryAvailability(
       tenantSlug: tenantSlug,
-      authToken: auth.token!,
+      authToken: authToken,
       categoryId: category.id,
       isAvailable: isAvailable,
     );
@@ -340,63 +363,66 @@ class _TenantStoreScreenState extends State<TenantStoreScreen> {
   }
 
   Future<void> _searchProducts() async {
-    final tenantSlug = context.read<TenantProvider>().tenant?.slug ?? '';
-    final auth = context.read<AuthProvider>();
+    final tenantSlug = _activeSellerTenantSlug() ?? '';
+    final authToken = _activeSellerToken();
     final productProvider = context.read<TenantProductProvider>();
     final selectedCategoryId = productProvider.selectedCategoryId;
 
-    if (tenantSlug.isEmpty || auth.token == null) return;
+    if (tenantSlug.isEmpty || authToken == null) return;
 
     await productProvider.loadProducts(
       tenantSlug: tenantSlug,
-      authToken: auth.token!,
+      authToken: authToken,
       search: _searchController.text.trim(),
       categoryId: selectedCategoryId,
     );
 
     if (!mounted) return;
+
     setState(() {
       _syncExpandedState(productProvider.groups);
     });
   }
 
   Future<void> _loadMore() async {
-    final tenantSlug = context.read<TenantProvider>().tenant?.slug ?? '';
-    final auth = context.read<AuthProvider>();
+    final tenantSlug = _activeSellerTenantSlug() ?? '';
+    final authToken = _activeSellerToken();
     final productProvider = context.read<TenantProductProvider>();
     final selectedCategoryId = productProvider.selectedCategoryId;
 
-    if (tenantSlug.isEmpty || auth.token == null) return;
+    if (tenantSlug.isEmpty || authToken == null) return;
 
     await productProvider.loadMore(
       tenantSlug: tenantSlug,
-      authToken: auth.token!,
+      authToken: authToken,
       categoryId: selectedCategoryId,
     );
 
     if (!mounted) return;
+
     setState(() {
       _syncExpandedState(productProvider.groups);
     });
   }
 
   Future<void> _selectCategory(int? categoryId) async {
-    final tenantSlug = context.read<TenantProvider>().tenant?.slug ?? '';
-    final auth = context.read<AuthProvider>();
+    final tenantSlug = _activeSellerTenantSlug() ?? '';
+    final authToken = _activeSellerToken();
     final productProvider = context.read<TenantProductProvider>();
 
-    if (tenantSlug.isEmpty || auth.token == null) return;
+    if (tenantSlug.isEmpty || authToken == null) return;
 
     productProvider.setSelectedCategory(categoryId);
 
     await productProvider.loadProducts(
       tenantSlug: tenantSlug,
-      authToken: auth.token!,
+      authToken: authToken,
       search: _searchController.text.trim(),
       categoryId: categoryId,
     );
 
     if (!mounted) return;
+
     setState(() {
       _syncExpandedState(productProvider.groups);
     });
@@ -407,6 +433,7 @@ class _TenantStoreScreenState extends State<TenantStoreScreen> {
     final storeProvider = context.watch<TenantStoreProvider>();
     final productProvider = context.watch<TenantProductProvider>();
     final tenantMode = context.watch<TenantModeProvider>();
+
     final store = storeProvider.store;
     final groups = productProvider.groups;
 
@@ -452,15 +479,13 @@ class _TenantStoreScreenState extends State<TenantStoreScreen> {
                     hasGroups: groups.isNotEmpty,
                     onChanged: (value) {
                       setState(() {});
-                      final tenantSlug =
-                          context.read<TenantProvider>().tenant?.slug ?? '';
-                      final auth = context.read<AuthProvider>();
-
-                      if (tenantSlug.isEmpty || auth.token == null) return;
+                      final tenantSlug = _activeSellerTenantSlug() ?? '';
+                      final authToken = _activeSellerToken();
+                      if (tenantSlug.isEmpty || authToken == null) return;
 
                       context.read<TenantProductProvider>().debounceSearch(
                         tenantSlug: tenantSlug,
-                        authToken: auth.token!,
+                        authToken: authToken,
                         search: value,
                         categoryId: context
                             .read<TenantProductProvider>()

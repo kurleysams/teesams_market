@@ -17,7 +17,7 @@ class TenantProductApi {
     );
 
     final response = await api.dio.get(
-      Endpoints.tenantProducts,
+      Endpoints.sellerTenantProducts,
       queryParameters: {
         if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
         'page': page,
@@ -78,7 +78,7 @@ class TenantProductApi {
     );
 
     await api.dio.patch(
-      Endpoints.tenantVariantAvailabilityBulk,
+      Endpoints.sellerTenantVariantAvailabilityBulk,
       data: {
         'is_available': isAvailable,
         if (productId != null) 'product_id': productId,
@@ -99,7 +99,7 @@ class TenantProductApi {
     );
 
     final response = await api.dio.patch(
-      Endpoints.tenantVariantAvailability(variantId),
+      Endpoints.sellerTenantVariantAvailability(variantId),
       data: {'is_available': isAvailable},
     );
 

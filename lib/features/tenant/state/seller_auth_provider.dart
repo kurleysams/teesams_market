@@ -29,7 +29,7 @@ class SellerAuthProvider extends ChangeNotifier {
     _error = null;
 
     try {
-      final apiClient = await ApiClient.create();
+      final apiClient = ApiClient.create();
       final repository = SellerAuthRepository(apiClient);
 
       final json = await repository.register(
@@ -54,7 +54,7 @@ class SellerAuthProvider extends ChangeNotifier {
     _error = null;
 
     try {
-      final apiClient = await ApiClient.create();
+      final apiClient = ApiClient.create();
       final repository = SellerAuthRepository(apiClient);
 
       final json = await repository.login(email: email, password: password);
@@ -75,7 +75,7 @@ class SellerAuthProvider extends ChangeNotifier {
     _error = null;
 
     try {
-      final apiClient = await ApiClient.create(authToken: _token);
+      final apiClient = ApiClient.create(authToken: _token);
       final repository = SellerAuthRepository(apiClient);
 
       final json = await repository.me();
@@ -105,7 +105,7 @@ class SellerAuthProvider extends ChangeNotifier {
   Future<void> logout() async {
     try {
       if (_token != null) {
-        final apiClient = await ApiClient.create(authToken: _token);
+        final apiClient = ApiClient.create(authToken: _token);
         final repository = SellerAuthRepository(apiClient);
         await repository.logout();
       }

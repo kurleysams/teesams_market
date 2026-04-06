@@ -1,3 +1,5 @@
+// lib/core/api/api_client.dart
+
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
@@ -8,10 +10,7 @@ class ApiClient {
 
   ApiClient._(this.dio);
 
-  static Future<ApiClient> create({
-    String? tenantSlug,
-    String? authToken,
-  }) async {
+  static ApiClient create({String? tenantSlug, String? authToken}) {
     final headers = <String, dynamic>{
       'Accept': 'application/json',
       'Content-Type': 'application/json',

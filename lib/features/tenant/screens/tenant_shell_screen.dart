@@ -3,8 +3,10 @@ import 'package:provider/provider.dart';
 
 import '../../auth/state/auth_provider.dart';
 import '../../auth/utils/mode_navigation.dart';
+import '../state/seller_auth_provider.dart';
+import '../state/tenant_mode_provider.dart';
 import '../state/tenant_provider.dart';
-import 'tenant_catalog_imports_screen.dart';
+import 'tenant_catalog_imports_page.dart';
 import 'tenant_dashboard_screen.dart';
 import 'tenant_orders_screen.dart';
 import 'tenant_store_screen.dart';
@@ -44,9 +46,21 @@ class _TenantShellScreenState extends State<TenantShellScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final tenant = context.watch<TenantProvider>().tenant;
-    final tenantName = tenant?.name?.trim().isNotEmpty == true
-        ? tenant!.name.trim()
+    final sellerAuthProvider = context.watch<SellerAuthProvider>();
+    final tenantMode = context.watch<TenantModeProvider>();
+    final storefrontTenant = context.watch<TenantProvider>().tenant;
+
+    final sellerTenantName = sellerAuthProvider.tenant?['name']?.toString();
+
+    final tenantName =
+        (sellerTenantName != null && sellerTenantName.trim().isNotEmpty)
+        ? sellerTenantName.trim()
+        : (tenantMode.selectedStoreName?.trim().isNotEmpty ?? false)
+        ? tenantMode.selectedStoreName!.trim()
+        : (tenantMode.selectedTenantName?.trim().isNotEmpty ?? false)
+        ? tenantMode.selectedTenantName!.trim()
+        : (storefrontTenant?.name?.trim().isNotEmpty ?? false)
+        ? storefrontTenant!.name.trim()
         : 'Store';
 
     return Scaffold(
@@ -71,7 +85,7 @@ class _TenantShellScreenState extends State<TenantShellScreen> {
           TenantDashboardScreen(),
           TenantOrdersScreen(),
           TenantStoreScreen(),
-          TenantCatalogImportsScreen(),
+          TenantCatalogImportsPage(),
         ],
       ),
       bottomNavigationBar: NavigationBar(

@@ -1,8 +1,10 @@
+// lib/features/tenant/screens/tenant_dashboard_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../auth/state/auth_provider.dart';
 import '../models/tenant_order_summary.dart';
+import '../state/seller_auth_provider.dart';
 import '../state/tenant_dashboard_provider.dart';
 import '../state/tenant_mode_provider.dart';
 import '../state/tenant_order_action_provider.dart';
@@ -21,35 +23,74 @@ class TenantDashboardScreen extends StatefulWidget {
 }
 
 class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
-  bool _didLoad = false;
   DateTime? _lastLoadedAt;
+  String? _lastTenantSlug;
+  String? _lastSellerToken;
+  bool _loadingTriggered = false;
+
+  String? _activeSellerTenantSlug() {
+    final sellerAuth = context.read<SellerAuthProvider>();
+    final sellerSlug = sellerAuth.tenant?['slug']?.toString().trim();
+    if (sellerSlug != null && sellerSlug.isNotEmpty) {
+      return sellerSlug;
+    }
+
+    final storefrontSlug = context.read<TenantProvider>().tenant?.slug?.trim();
+    if (storefrontSlug != null && storefrontSlug.isNotEmpty) {
+      return storefrontSlug;
+    }
+
+    return null;
+  }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
 
-    if (_didLoad) return;
-    _didLoad = true;
+    final tenantSlug = _activeSellerTenantSlug() ?? '';
+    final sellerToken = context.watch<SellerAuthProvider>().token ?? '';
+
+    final tenantChanged = tenantSlug != _lastTenantSlug;
+    final tokenChanged = sellerToken != _lastSellerToken;
+    final shouldAttemptLoad =
+        tenantSlug.isNotEmpty &&
+        sellerToken.isNotEmpty &&
+        (!_loadingTriggered || tenantChanged || tokenChanged);
+
+    if (!shouldAttemptLoad) return;
+
+    _lastTenantSlug = tenantSlug;
+    _lastSellerToken = sellerToken;
+    _loadingTriggered = true;
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
       await _loadDashboard();
     });
   }
 
   Future<void> _loadDashboard() async {
-    final storefrontTenant = context.read<TenantProvider>().tenant?.slug ?? '';
-    final auth = context.read<AuthProvider>();
+    final storefrontTenant = _activeSellerTenantSlug() ?? '';
+    final sellerAuth = context.read<SellerAuthProvider>();
+    final sellerToken = sellerAuth.token;
 
-    if (storefrontTenant.isEmpty || auth.token == null) {
+    if (storefrontTenant.isEmpty ||
+        sellerToken == null ||
+        sellerToken.isEmpty) {
       return;
     }
 
+    debugPrint(
+      'DASHBOARD LOAD START -> tenant=$storefrontTenant tokenPresent=${sellerToken.isNotEmpty}',
+    );
+
     await context.read<TenantDashboardProvider>().loadDashboard(
       tenantSlug: storefrontTenant,
-      authToken: auth.token!,
+      authToken: sellerToken,
     );
 
     if (!mounted) return;
+
     setState(() {
       _lastLoadedAt = DateTime.now();
     });
@@ -62,10 +103,10 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
     final tenantMode = context.read<TenantModeProvider>();
     if (!tenantMode.canReadOrders) return;
 
-    final auth = context.read<AuthProvider>();
-    final storefrontTenant = context.read<TenantProvider>().tenant?.slug ?? '';
+    final sellerAuth = context.read<SellerAuthProvider>();
+    final storefrontTenant = _activeSellerTenantSlug() ?? '';
     final storeId = tenantMode.selectedStoreId;
-    final token = auth.token;
+    final token = sellerAuth.token;
 
     final ordersProvider = context.read<TenantOrdersProvider>();
     ordersProvider.setLifecycle(lifecycle);
@@ -150,7 +191,17 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
     }
 
     if (dashboard == null) {
-      return const Center(child: Text('No dashboard data'));
+      return RefreshIndicator(
+        onRefresh: _loadDashboard,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(24),
+          children: const [
+            SizedBox(height: 80),
+            Center(child: Text('No dashboard data')),
+          ],
+        ),
+      );
     }
 
     return RefreshIndicator(

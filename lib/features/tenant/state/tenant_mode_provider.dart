@@ -46,16 +46,37 @@ class TenantModeProvider extends ChangeNotifier {
       final response = await api.dio.get(Endpoints.appBootstrap);
       final data = response.data;
 
+      debugPrint('BOOTSTRAP RESPONSE -> $data');
+
       if (data is! Map<String, dynamic>) {
         throw Exception('Invalid bootstrap response');
       }
 
       _bootstrap = AppBootstrap.fromJson(data);
 
-      final storedMode = await StorageService.readString('selected_app_mode');
-      final storedStoreId = await StorageService.readString(
-        'selected_tenant_store_id',
+      debugPrint(
+        'BOOTSTRAP MODES -> '
+        'available=${_bootstrap?.availableModes}, '
+        'default=${_bootstrap?.defaultMode}',
       );
+
+      debugPrint(
+        'BOOTSTRAP MEMBERSHIP COUNT -> ${_bootstrap?.tenantMemberships.length ?? 0}',
+      );
+
+      for (final membership
+          in _bootstrap?.tenantMemberships ?? <TenantMembership>[]) {
+        debugPrint(
+          'BOOTSTRAP MEMBERSHIP ITEM -> '
+          'storeId=${membership.storeId}, '
+          'storeName=${membership.storeName}, '
+          'tenantName=${membership.tenantName}, '
+          'role=${membership.role}, '
+          'permissions=${membership.permissions}',
+        );
+      }
+
+      final storedMode = await StorageService.readString('selected_app_mode');
 
       if (storedMode != null &&
           _bootstrap!.availableModes.contains(storedMode)) {
@@ -66,32 +87,34 @@ class TenantModeProvider extends ChangeNotifier {
         _selectedMode = null;
       }
 
-      if (_bootstrap!.tenantMemberships.isNotEmpty) {
-        TenantMembership? selected;
+      debugPrint('BOOTSTRAP SELECTED MODE -> $_selectedMode');
 
-        if (storedStoreId != null) {
-          final parsedStoreId = int.tryParse(storedStoreId);
-          if (parsedStoreId != null) {
-            for (final membership in _bootstrap!.tenantMemberships) {
-              if (membership.storeId == parsedStoreId) {
-                selected = membership;
-                break;
-              }
-            }
-          }
-        }
+      // Important:
+      // Do NOT silently pick the first membership here.
+      // Seller identity / store selection must be handled explicitly.
+      _selectedMembership = null;
 
-        selected ??= _bootstrap!.tenantMemberships.first;
-        _selectedMembership = selected;
-      }
+      debugPrint(
+        'BOOTSTRAP SELECTED MEMBERSHIP -> '
+        'storeId=${_selectedMembership?.storeId}, '
+        'storeName=${_selectedMembership?.storeName}, '
+        'tenantName=${_selectedMembership?.tenantName}, '
+        'role=${_selectedMembership?.role}, '
+        'permissions=${_selectedMembership?.permissions}',
+      );
     } on DioException catch (e) {
       final data = e.response?.data;
+      debugPrint(
+        'BOOTSTRAP DIO ERROR -> status=${e.response?.statusCode} data=$data',
+      );
+
       if (data is Map && data['message'] != null) {
         _error = data['message'].toString();
       } else {
         _error = e.message ?? 'Unable to load tenant mode';
       }
     } catch (e) {
+      debugPrint('BOOTSTRAP GENERAL ERROR -> $e');
       _error = e.toString().replaceFirst('Exception: ', '');
     } finally {
       _loading = false;
@@ -115,6 +138,84 @@ class TenantModeProvider extends ChangeNotifier {
       );
     }
 
+    notifyListeners();
+  }
+
+  Future<void> selectMembershipForSellerOrFail({
+    required int? sellerTenantId,
+  }) async {
+    final memberships =
+        _bootstrap?.tenantMemberships ?? const <TenantMembership>[];
+
+    if (sellerTenantId == null) {
+      _selectedMembership = null;
+      _error = 'Seller account is missing linked store information.';
+      notifyListeners();
+      return;
+    }
+
+    TenantMembership? matched;
+
+    for (final membership in memberships) {
+      if (membership.storeId == sellerTenantId) {
+        matched = membership;
+        break;
+      }
+    }
+
+    if (matched == null) {
+      _selectedMembership = null;
+      _error = 'This seller account does not have access to its linked store.';
+      notifyListeners();
+      return;
+    }
+
+    _error = null;
+    await setSelectedMembership(matched);
+    await setSelectedMode('tenant');
+
+    debugPrint(
+      'SELLER MEMBERSHIP MATCHED -> '
+      'storeId=${matched.storeId}, '
+      'storeName=${matched.storeName}, '
+      'role=${matched.role}, '
+      'permissions=${matched.permissions}',
+    );
+  }
+
+  Future<void> selectStoredMembershipIfValid() async {
+    final memberships =
+        _bootstrap?.tenantMemberships ?? const <TenantMembership>[];
+    final storedStoreId = await StorageService.readString(
+      'selected_tenant_store_id',
+    );
+
+    if (memberships.isEmpty || storedStoreId == null) return;
+
+    final parsedStoreId = int.tryParse(storedStoreId);
+    if (parsedStoreId == null) return;
+
+    for (final membership in memberships) {
+      if (membership.storeId == parsedStoreId) {
+        await setSelectedMembership(membership);
+        return;
+      }
+    }
+  }
+
+  Future<void> clearPersistedSelection() async {
+    await StorageService.delete('selected_app_mode');
+    await StorageService.delete('selected_tenant_store_id');
+  }
+
+  Future<void> resetAll() async {
+    await clearPersistedSelection();
+
+    _bootstrap = null;
+    _selectedMode = null;
+    _selectedMembership = null;
+    _error = null;
+    _loading = false;
     notifyListeners();
   }
 

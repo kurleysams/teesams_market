@@ -222,6 +222,9 @@ class _CatalogScreenState extends State<CatalogScreen> {
             sellerStatus == 'pending_review' ||
             sellerStatus == 'onboarding_in_progress');
 
+    final showSellerCardAtTop = !auth.isAuthenticated;
+    final showSellerCardLower = auth.isAuthenticated;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
@@ -353,17 +356,19 @@ class _CatalogScreenState extends State<CatalogScreen> {
                             },
                           ),
                         ),
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                          child: _SellerEntryCard(
-                            hasSellerSession: hasSellerSession,
-                            sellerIsActive: sellerIsActive,
-                            sellerStatus: sellerStatus,
-                            onStartSelling: _openSellerWelcome,
-                            onSellerSignIn: _openSellerLogin,
-                            onSellerPortal: _openSellerDashboardOrOnboarding,
+                        if (showSellerCardAtTop)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                            child: _SellerEntryCard(
+                              hasSellerSession: hasSellerSession,
+                              sellerIsActive: sellerIsActive,
+                              sellerStatus: sellerStatus,
+                              compact: false,
+                              onStartSelling: _openSellerWelcome,
+                              onSellerSignIn: _openSellerLogin,
+                              onSellerPortal: _openSellerDashboardOrOnboarding,
+                            ),
                           ),
-                        ),
                       ],
                     ),
                   ),
@@ -571,22 +576,25 @@ class _CatalogScreenState extends State<CatalogScreen> {
                         );
                       }, childCount: catalog.filteredProducts.length),
                     ),
+                  if (showSellerCardLower)
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                        child: _SellerEntryCard(
+                          hasSellerSession: hasSellerSession,
+                          sellerIsActive: sellerIsActive,
+                          sellerStatus: sellerStatus,
+                          compact: true,
+                          onStartSelling: _openSellerWelcome,
+                          onSellerSignIn: _openSellerLogin,
+                          onSellerPortal: _openSellerDashboardOrOnboarding,
+                        ),
+                      ),
+                    ),
                   const SliverToBoxAdapter(child: SizedBox(height: 16)),
                 ],
               ),
       ),
-      floatingActionButton: canAccessStaffDashboard
-          ? FloatingActionButton.extended(
-              onPressed: _openStaffDashboard,
-              backgroundColor: const Color(0xFF1D4ED8),
-              foregroundColor: Colors.white,
-              icon: const Icon(Icons.storefront_outlined),
-              label: const Text(
-                'Staff',
-                style: TextStyle(fontWeight: FontWeight.w700),
-              ),
-            )
-          : null,
     );
   }
 }
@@ -618,18 +626,14 @@ class _StoreContextCard extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: EdgeInsets.symmetric(
+        horizontal: 14,
+        vertical: isAuthenticated ? 10 : 12,
+      ),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(color: const Color(0xFFE5E7EB)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x08000000),
-            blurRadius: 8,
-            offset: Offset(0, 3),
-          ),
-        ],
       ),
       child: isAuthenticated
           ? _SignedInStoreBar(
@@ -649,6 +653,7 @@ class _SellerEntryCard extends StatelessWidget {
   final bool hasSellerSession;
   final bool sellerIsActive;
   final String? sellerStatus;
+  final bool compact;
   final VoidCallback onStartSelling;
   final VoidCallback onSellerSignIn;
   final VoidCallback onSellerPortal;
@@ -657,6 +662,7 @@ class _SellerEntryCard extends StatelessWidget {
     required this.hasSellerSession,
     required this.sellerIsActive,
     required this.sellerStatus,
+    required this.compact,
     required this.onStartSelling,
     required this.onSellerSignIn,
     required this.onSellerPortal,
@@ -671,18 +677,11 @@ class _SellerEntryCard extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(compact ? 14 : 16),
       decoration: BoxDecoration(
         color: const Color(0xFFEFF6FF),
         borderRadius: BorderRadius.circular(22),
         border: Border.all(color: const Color(0xFFBFDBFE)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x08000000),
-            blurRadius: 8,
-            offset: Offset(0, 3),
-          ),
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -707,6 +706,8 @@ class _SellerEntryCard extends StatelessWidget {
           Text(
             hasSellerSession
                 ? statusText
+                : compact
+                ? 'Open your store on Teesams and complete onboarding in the app.'
                 : 'Open your store on Teesams, complete onboarding in the app, and submit for review.',
             style: const TextStyle(
               fontSize: 14,
@@ -788,59 +789,62 @@ class _SignedInStoreBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final actionStyle = TextButton.styleFrom(
       foregroundColor: const Color(0xFF325A88),
-      textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       minimumSize: Size.zero,
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       visualDensity: VisualDensity.compact,
     );
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: [
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 165),
-            child: Text(
-              email,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF6B7280),
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            email,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF6B7280),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        TextButton(
+          onPressed: onProfile,
+          style: actionStyle,
+          child: const Text('Profile'),
+        ),
+        TextButton(
+          onPressed: onOrders,
+          style: actionStyle,
+          child: const Text('Orders'),
+        ),
+        PopupMenuButton<String>(
+          padding: EdgeInsets.zero,
+          tooltip: 'More',
+          onSelected: (value) {
+            switch (value) {
+              case 'switch':
+                onSwitchStore();
+                break;
+              case 'staff':
+                onStaff();
+                break;
+            }
+          },
+          itemBuilder: (context) => [
+            const PopupMenuItem(value: 'switch', child: Text('Switch store')),
+            if (canAccessStaffDashboard)
+              const PopupMenuItem(
+                value: 'staff',
+                child: Text('Staff dashboard'),
               ),
-            ),
-          ),
-          const SizedBox(width: 6),
-          IconButton(
-            onPressed: onSwitchStore,
-            visualDensity: VisualDensity.compact,
-            splashRadius: 20,
-            tooltip: 'Switch store',
-            icon: const Icon(
-              Icons.swap_horiz_rounded,
-              color: Color(0xFF325A88),
-            ),
-          ),
-          TextButton(
-            onPressed: onProfile,
-            style: actionStyle,
-            child: const Text('Profile'),
-          ),
-          TextButton(
-            onPressed: onOrders,
-            style: actionStyle,
-            child: const Text('Orders'),
-          ),
-          if (canAccessStaffDashboard)
-            TextButton(
-              onPressed: onStaff,
-              style: actionStyle,
-              child: const Text('Staff'),
-            ),
-        ],
-      ),
+          ],
+          icon: const Icon(Icons.more_horiz, color: Color(0xFF325A88)),
+        ),
+      ],
     );
   }
 }

@@ -35,9 +35,9 @@ class _AdminTenantReviewCardState extends State<AdminTenantReviewCard> {
     'business_details': 'Business details',
     'store_profile': 'Store profile',
     'operations': 'Store operations',
-    'documents': 'Verification documents',
+    'documents': 'Business review documents',
     'catalog_setup': 'Catalog setup',
-    'payout_setup': 'Payout setup',
+    'payout_setup': 'Stripe approval',
   };
 
   @override

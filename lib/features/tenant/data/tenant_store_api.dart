@@ -12,7 +12,7 @@ class TenantStoreApi {
       authToken: authToken,
     );
 
-    final response = await api.dio.get(Endpoints.tenantStore);
+    final response = await api.dio.get(Endpoints.sellerTenantStore);
     final data = response.data;
 
     if (data is! Map<String, dynamic>) {
@@ -33,7 +33,7 @@ class TenantStoreApi {
     );
 
     final response = await api.dio.patch(
-      Endpoints.tenantStoreStatus,
+      Endpoints.sellerTenantStoreStatus,
       data: {'is_open': isOpen},
     );
 

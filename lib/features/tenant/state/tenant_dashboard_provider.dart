@@ -24,18 +24,31 @@ class TenantDashboardProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _dashboard = await _api.fetchDashboard(
+      debugPrint(
+        'DASHBOARD LOAD START -> tenant=$tenantSlug tokenPresent=${authToken.isNotEmpty}',
+      );
+
+      final result = await _api.fetchDashboard(
         tenantSlug: tenantSlug,
         authToken: authToken,
       );
+
+      _dashboard = result;
+      debugPrint('DASHBOARD PARSED OK');
     } on DioException catch (e) {
       final data = e.response?.data;
+
+      debugPrint(
+        'DASHBOARD DIO ERROR -> status=${e.response?.statusCode} data=$data',
+      );
+
       if (data is Map && data['message'] != null) {
         _error = data['message'].toString();
       } else {
         _error = e.message ?? 'Unable to load dashboard';
       }
     } catch (e) {
+      debugPrint('DASHBOARD GENERAL ERROR -> $e');
       _error = e.toString().replaceFirst('Exception: ', '');
     } finally {
       _loading = false;

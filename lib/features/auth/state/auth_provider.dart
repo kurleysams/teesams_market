@@ -36,10 +36,7 @@ class AuthProvider extends ChangeNotifier {
 
       _token = storedToken;
 
-      final api = await ApiClient.create(
-        tenantSlug: tenantSlug,
-        authToken: _token,
-      );
+      final api = ApiClient.create(tenantSlug: tenantSlug, authToken: _token);
 
       final response = await api.dio.get(Endpoints.authMe);
       final data = response.data;
@@ -78,7 +75,7 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final api = await ApiClient.create(tenantSlug: tenantSlug);
+      final api = ApiClient.create(tenantSlug: tenantSlug);
 
       final response = await api.dio.post(
         Endpoints.authLogin,
@@ -140,7 +137,7 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final api = await ApiClient.create(tenantSlug: tenantSlug);
+      final api = ApiClient.create(tenantSlug: tenantSlug);
 
       final response = await api.dio.post(
         Endpoints.authRegister,
@@ -211,10 +208,7 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final api = await ApiClient.create(
-        tenantSlug: tenantSlug,
-        authToken: _token,
-      );
+      final api = ApiClient.create(tenantSlug: tenantSlug, authToken: _token);
 
       final response = await api.dio.patch(
         Endpoints.myProfile,
@@ -264,10 +258,7 @@ class AuthProvider extends ChangeNotifier {
   Future<void> logout({required String tenantSlug}) async {
     try {
       if (_token != null && _token!.isNotEmpty) {
-        final api = await ApiClient.create(
-          tenantSlug: tenantSlug,
-          authToken: _token,
-        );
+        final api = ApiClient.create(tenantSlug: tenantSlug, authToken: _token);
         await api.dio.post(Endpoints.authLogout);
       }
     } catch (_) {
