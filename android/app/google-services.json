@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "774468595339",
+    "project_id": "teesams-market",
+    "storage_bucket": "teesams-market.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:774468595339:android:fbee7316f8cbced3b12e8e",
+        "android_client_info": {
+          "package_name": "com.teesams.teesams_market"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDLaoRk7WC7TL6vxLznmOSq836-gBY8wsY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

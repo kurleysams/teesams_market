@@ -99,8 +99,5 @@
 		<key>NSApplePayUsageDescription</key>
 		<string>This app uses Apple Pay for secure payments.</string>
 
-		<key>NSMerchantIdentifier</key>
-		<string>merchant.com.teesams.market</string>
-
 	</dict>
 </plist>

@@ -1,0 +1,166 @@
+workflows:
+  teesams_market_android:
+    name: Teesams Market Android
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+      vars:
+        PACKAGE_NAME: "com.teesams.teesams_market"
+      android_signing:
+        - teesams_market_keystore
+      groups:
+        - google_play
+
+    cache:
+      cache_paths:
+        - $FLUTTER_ROOT/.pub-cache
+        - ~/.gradle/caches
+        - ~/.gradle/wrapper
+        - $HOME/Library/Caches/CocoaPods
+
+    triggering:
+      events:
+        - push
+        - tag
+      branch_patterns:
+        - pattern: main
+          include: true
+          source: true
+
+    scripts:
+      - name: Flutter version
+        script: |
+          flutter --version
+
+      - name: Get packages
+        script: |
+          flutter pub get
+
+      - name: Generate app icons and splash
+        script: |
+          dart run flutter_launcher_icons
+          dart run flutter_native_splash:create
+
+      - name: Analyze
+        script: |
+          flutter analyze
+
+      - name: Run tests
+        script: |
+          flutter test
+
+      - name: Build Android App Bundle
+        script: |
+          flutter build appbundle --release
+
+      - name: Build Android APK
+        script: |
+          flutter build apk --release
+
+    artifacts:
+      - build/app/outputs/**/*.aab
+      - build/app/outputs/**/*.apk
+      - flutter_drive.log
+
+    publishing:
+      email:
+        recipients:
+          - sitt.cong.assignment@gmail.com
+      google_play:
+        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
+        track: internal
+        submit_as_draft: true
+
+  teesams_market_ios:
+    name: Teesams Market iOS
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+
+    integrations:
+      app_store_connect: codemagic_app_store_connect
+
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+      vars:
+        BUNDLE_ID: "com.teesams.teesamsMarket"
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.teesams.teesamsMarket
+      groups:
+        - app_store_credentials
+
+    cache:
+      cache_paths:
+        - $FLUTTER_ROOT/.pub-cache
+        - ~/.gradle/caches
+        - ~/.gradle/wrapper
+        - $HOME/Library/Caches/CocoaPods
+
+    triggering:
+      events:
+        - push
+        - tag
+      branch_patterns:
+        - pattern: main
+          include: true
+          source: true
+
+    scripts:
+      - name: Set up iOS signing
+        script: |
+          keychain initialize
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --create
+          keychain add-certificates
+          xcode-project use-profiles
+
+      - name: Flutter version
+        script: |
+          flutter --version
+
+      - name: Get packages
+        script: |
+          flutter pub get
+
+      - name: Generate app icons and splash
+        script: |
+          dart run flutter_launcher_icons
+          dart run flutter_native_splash:create
+
+      - name: Install CocoaPods
+        script: |
+          find . -name "Podfile" -execdir pod install \;
+
+      - name: Analyze
+        script: |
+          flutter analyze
+
+      - name: Run tests
+        script: |
+          flutter test
+
+      - name: Build iOS IPA
+        script: |
+          flutter build ipa --release
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - flutter_drive.log
+
+    publishing:
+      email:
+        recipients:
+          - samuel.omopariola.nhs@gmail.com
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        beta_groups:
+          - Internal Testers
