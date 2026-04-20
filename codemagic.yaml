@@ -81,7 +81,7 @@ workflows:
     instance_type: mac_mini_m2
 
     integrations:
-      app_store_connect: codemagic_app_store_connect
+      app_store_connect: teesamsmarket
 
     environment:
       flutter: stable
