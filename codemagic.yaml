@@ -75,82 +75,74 @@ workflows:
         track: internal
         submit_as_draft: true
 
-  teesams_market_ios:
-    name: Teesams Market iOS
-    max_build_duration: 60
-    instance_type: mac_mini_m2
+teesams_market_ios:
+  name: Teesams Market iOS
+  max_build_duration: 60
+  instance_type: mac_mini_m2
 
-    integrations:
-      app_store_connect: teesamsmarket
+  integrations:
+    app_store_connect: teesamsmarket
 
-    environment:
-      flutter: stable
-      xcode: latest
-      cocoapods: default
-      vars:
-        BUNDLE_ID: "com.teesams.teesamsMarket"
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.teesams.teesamsMarket
-      groups:
-        - app_store_credentials
+  environment:
+    flutter: stable
+    xcode: latest
+    cocoapods: default
+    vars:
+      BUNDLE_ID: "com.teesams.teesamsMarket"
+    ios_signing:
+      distribution_type: app_store
+      bundle_identifier: com.teesams.teesamsMarket
 
-    cache:
-      cache_paths:
-        - $FLUTTER_ROOT/.pub-cache
-        - ~/.gradle/caches
-        - ~/.gradle/wrapper
-        - $HOME/Library/Caches/CocoaPods
+  cache:
+    cache_paths:
+      - $FLUTTER_ROOT/.pub-cache
+      - ~/.gradle/caches
+      - ~/.gradle/wrapper
+      - $HOME/Library/Caches/CocoaPods
 
-    scripts:
-      - name: Set up iOS signing
-        script: |
-          keychain initialize
-          app-store-connect fetch-signing-files "$BUNDLE_ID" \
-            --type IOS_APP_STORE \
-            --create
-          keychain add-certificates
-          xcode-project use-profiles
+  scripts:
+    - name: Flutter version
+      script: flutter --version
 
-      - name: Flutter version
-        script: flutter --version
+    - name: Get packages
+      script: flutter pub get
 
-      - name: Get packages
-        script: flutter pub get
+    - name: Generate app icons and splash
+      script: |
+        dart run flutter_launcher_icons
+        dart run flutter_native_splash:create
 
-      - name: Generate app icons and splash
-        script: |
-          dart run flutter_launcher_icons
-          dart run flutter_native_splash:create
+    - name: Install CocoaPods
+      script: find . -name "Podfile" -execdir pod install \;
 
-      - name: Install CocoaPods
-        script: find . -name "Podfile" -execdir pod install \;
+    - name: Analyze
+      script: flutter analyze --no-fatal-infos || true
 
-      - name: Analyze
-        script: flutter analyze --no-fatal-infos || true
+    - name: Run tests
+      script: flutter test
 
-      - name: Run tests
-        script: flutter test
+    - name: Build iOS IPA
+      script: |
+        xcode-project use-profiles
+        flutter build ipa --release --export-method app-store
+        echo "CM_BUILD_DIR=$CM_BUILD_DIR"
+        echo "Searching for IPA files..."
+        find "$CM_BUILD_DIR" -type f -name "*.ipa" | sort
+        echo "Listing build/ios contents..."
+        find "$CM_BUILD_DIR/build/ios" -maxdepth 4 -type f | sort || true
 
-      - name: Build iOS IPA
-        script: |
-          flutter build ipa --release --export-method app-store
-          echo "Listing iOS build outputs..."
-          find build/ios -maxdepth 3 -type f | sort
-          ls -lah build/ios/ipa || true
+  artifacts:
+    - $CM_BUILD_DIR/build/ios/ipa/*.ipa
+    - $CM_BUILD_DIR/build/ios/archive/*.xcarchive
+    - /tmp/xcodebuild_logs/*.log
+    - flutter_drive.log
 
-    artifacts:
-      - build/ios/ipa/*.ipa
-      - build/ios/archive/*.xcarchive
-      - /tmp/xcodebuild_logs/*.log
-      - flutter_drive.log
-
-    publishing:
-      email:
-        recipients:
-          - samuel.omopariola.nhs@gmail.com
-      app_store_connect:
-        auth: integration
-        submit_to_testflight: true
-        beta_groups:
-          - Internal Testers   - Internal Testers
+  publishing:
+    email:
+      recipients:
+        - samuel.omopariola.nhs@gmail.com
+    app_store_connect:
+      auth: integration
+      submit_to_testflight: true
+      beta_groups:
+        - Internal Testers
