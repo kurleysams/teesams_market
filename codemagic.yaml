@@ -102,15 +102,6 @@ workflows:
         - ~/.gradle/wrapper
         - $HOME/Library/Caches/CocoaPods
 
-    triggering:
-      events:
-        - push
-        - tag
-      branch_patterns:
-        - pattern: main
-          include: true
-          source: true
-
     scripts:
       - name: Set up iOS signing
         script: |
@@ -122,12 +113,10 @@ workflows:
           xcode-project use-profiles
 
       - name: Flutter version
-        script: |
-          flutter --version
+        script: flutter --version
 
       - name: Get packages
-        script: |
-          flutter pub get
+        script: flutter pub get
 
       - name: Generate app icons and splash
         script: |
@@ -135,23 +124,24 @@ workflows:
           dart run flutter_native_splash:create
 
       - name: Install CocoaPods
-        script: |
-          find . -name "Podfile" -execdir pod install \;
+        script: find . -name "Podfile" -execdir pod install \;
 
       - name: Analyze
-        script: |
-          flutter analyze --no-fatal-infos || true
+        script: flutter analyze --no-fatal-infos || true
 
       - name: Run tests
-        script: |
-          flutter test
+        script: flutter test
 
       - name: Build iOS IPA
         script: |
-          flutter build ipa --release
+          flutter build ipa --release --export-method app-store
+          echo "Listing iOS build outputs..."
+          find build/ios -maxdepth 3 -type f | sort
+          ls -lah build/ios/ipa || true
 
     artifacts:
       - build/ios/ipa/*.ipa
+      - build/ios/archive/*.xcarchive
       - /tmp/xcodebuild_logs/*.log
       - flutter_drive.log
 
@@ -163,4 +153,4 @@ workflows:
         auth: integration
         submit_to_testflight: true
         beta_groups:
-          - Internal Testers
+          - Internal Testers   - Internal Testers
