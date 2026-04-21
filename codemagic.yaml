@@ -141,22 +141,24 @@ workflows:
       - name: Build iOS IPA
         script: |
           set -euo pipefail
+
           xcode-project use-profiles
+
           flutter clean
           flutter pub get
-          flutter build ipa --release --export-method app-store --verbose | tee /tmp/flutter_build_ipa.log
 
-          echo "Searching repo for IPA files..."
+          flutter build ipa --release --export-method app-store --verbose 2>&1 | tee /tmp/flutter_build_ipa.log
+
+          echo "==== IPA search ===="
           find . -type f -name "*.ipa" | sort || true
-
-          echo "Searching CM_BUILD_DIR for IPA files..."
           find "$CM_BUILD_DIR" -type f -name "*.ipa" | sort || true
 
-          echo "Listing build/ios contents..."
-          find build/ios -maxdepth 6 -type f | sort || true
+          echo "==== Archive search ===="
+          find . -type d -name "*.xcarchive" | sort || true
+          find "$CM_BUILD_DIR" -type d -name "*.xcarchive" | sort || true
 
-          echo "Xcode logs..."
-          find /tmp/xcodebuild_logs -type f | sort || true
+          echo "==== Likely errors from build log ===="
+          grep -Ei "error:|exportArchive|provision|profile|signing|entitlement|requires a provisioning profile|No profiles for|Code signing is required|No signing certificate" /tmp/flutter_build_ipa.log || true
 
           test -n "$(find . -type f -name '*.ipa' -print -quit)" || {
             echo "No IPA produced by flutter build ipa"
@@ -165,12 +167,9 @@ workflows:
 
     artifacts:
       - build/ios/ipa/*.ipa
-      - $CM_BUILD_DIR/**/build/ios/ipa/*.ipa
-      - $CM_BUILD_DIR/**/*.ipa
       - build/ios/archive/*.xcarchive
-      - $CM_BUILD_DIR/**/build/ios/archive/*.xcarchive
-      - /tmp/xcodebuild_logs/*.log
       - /tmp/flutter_build_ipa.log
+      - /tmp/xcodebuild_logs/*.log
       - flutter_drive.log
 
     publishing:
