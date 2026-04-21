@@ -1,79 +1,79 @@
 workflows:
-  teesams_market_android:
-    name: Teesams Market Android
-    max_build_duration: 60
-    instance_type: mac_mini_m2
-
-    environment:
-      flutter: stable
-      xcode: latest
-      cocoapods: default
-      vars:
-        PACKAGE_NAME: "com.teesams.teesams_market"
-      android_signing:
-        - teesams_market_keystore
-      groups:
-        - google_play
-
-    cache:
-      cache_paths:
-        - $FLUTTER_ROOT/.pub-cache
-        - ~/.gradle/caches
-        - ~/.gradle/wrapper
-        - $HOME/Library/Caches/CocoaPods
-
-    triggering:
-      events:
-        - push
-        - tag
-      branch_patterns:
-        - pattern: main
-          include: true
-          source: true
-
-    scripts:
-      - name: Flutter version
-        script: |
-          flutter --version
-
-      - name: Get packages
-        script: |
-          flutter pub get
-
-      - name: Generate app icons and splash
-        script: |
-          dart run flutter_launcher_icons
-          dart run flutter_native_splash:create
-
-      - name: Analyze
-        script: |
-          flutter analyze --no-fatal-infos || true
-
-      - name: Run tests
-        script: |
-          flutter test
-
-      - name: Build Android App Bundle
-        script: |
-          flutter build appbundle --release
-
-      - name: Build Android APK
-        script: |
-          flutter build apk --release
-
-    artifacts:
-      - build/app/outputs/**/*.aab
-      - build/app/outputs/**/*.apk
-      - flutter_drive.log
-
-    publishing:
-      email:
-        recipients:
-          - sitt.cong.assignment@gmail.com
-      google_play:
-        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
-        track: internal
-        submit_as_draft: true
+  # teesams_market_android:
+  #   name: Teesams Market Android
+  #   max_build_duration: 60
+  #   instance_type: mac_mini_m2
+  #
+  #   environment:
+  #     flutter: stable
+  #     xcode: latest
+  #     cocoapods: default
+  #     vars:
+  #       PACKAGE_NAME: "com.teesams.teesams_market"
+  #     android_signing:
+  #       - teesams_market_keystore
+  #     groups:
+  #       - google_play
+  #
+  #   cache:
+  #     cache_paths:
+  #       - $FLUTTER_ROOT/.pub-cache
+  #       - ~/.gradle/caches
+  #       - ~/.gradle/wrapper
+  #       - $HOME/Library/Caches/CocoaPods
+  #
+  #   triggering:
+  #     events:
+  #       - push
+  #       - tag
+  #     branch_patterns:
+  #       - pattern: main
+  #         include: true
+  #         source: true
+  #
+  #   scripts:
+  #     - name: Flutter version
+  #       script: |
+  #         flutter --version
+  #
+  #     - name: Get packages
+  #       script: |
+  #         flutter pub get
+  #
+  #     - name: Generate app icons and splash
+  #       script: |
+  #         dart run flutter_launcher_icons
+  #         dart run flutter_native_splash:create
+  #
+  #     - name: Analyze
+  #       script: |
+  #         flutter analyze --no-fatal-infos || true
+  #
+  #     - name: Run tests
+  #       script: |
+  #         flutter test
+  #
+  #     - name: Build Android App Bundle
+  #       script: |
+  #         flutter build appbundle --release
+  #
+  #     - name: Build Android APK
+  #       script: |
+  #         flutter build apk --release
+  #
+  #   artifacts:
+  #     - build/app/outputs/**/*.aab
+  #     - build/app/outputs/**/*.apk
+  #     - flutter_drive.log
+  #
+  #   publishing:
+  #     email:
+  #       recipients:
+  #         - sitt.cong.assignment@gmail.com
+  #     google_play:
+  #       credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
+  #       track: internal
+  #       submit_as_draft: true
 
   teesams_market_ios:
     name: Teesams Market iOS
@@ -102,10 +102,12 @@ workflows:
 
     scripts:
       - name: Flutter version
-        script: flutter --version
+        script: |
+          flutter --version
 
       - name: Get packages
-        script: flutter pub get
+        script: |
+          flutter pub get
 
       - name: Generate app icons and splash
         script: |
@@ -113,27 +115,49 @@ workflows:
           dart run flutter_native_splash:create
 
       - name: Install CocoaPods
-        script: cd ios && pod install
+        script: |
+          cd ios
+          pod install
 
       - name: Analyze
-        script: flutter analyze --no-fatal-infos || true
+        script: |
+          flutter analyze --no-fatal-infos || true
 
       - name: Run tests
-        script: flutter test
+        script: |
+          flutter test
 
       - name: Build iOS IPA
         script: |
+          set -e
           xcode-project use-profiles
+          flutter clean
+          flutter pub get
           flutter build ipa --release --export-method app-store
+
           echo "CM_BUILD_DIR=$CM_BUILD_DIR"
-          echo "Searching for IPA files..."
-          find "$CM_BUILD_DIR" -type f -name "*.ipa" | sort
+          echo "PWD=$(pwd)"
+
+          echo "Searching repo for IPA files..."
+          find . -type f -name "*.ipa" | sort || true
+
+          echo "Searching CM_BUILD_DIR for IPA files..."
+          find "$CM_BUILD_DIR" -type f -name "*.ipa" | sort || true
+
           echo "Listing build/ios contents..."
-          find "$CM_BUILD_DIR/build/ios" -maxdepth 4 -type f | sort || true
+          find build/ios -maxdepth 5 -type f | sort || true
+
+          test -n "$(find . -type f -name '*.ipa' -print -quit)" || {
+            echo "No IPA produced by flutter build ipa"
+            exit 1
+          }
 
     artifacts:
       - build/ios/ipa/*.ipa
+      - $CM_BUILD_DIR/**/build/ios/ipa/*.ipa
+      - $CM_BUILD_DIR/**/*.ipa
       - build/ios/archive/*.xcarchive
+      - $CM_BUILD_DIR/**/build/ios/archive/*.xcarchive
       - /tmp/xcodebuild_logs/*.log
       - flutter_drive.log
 
