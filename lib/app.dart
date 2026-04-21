@@ -219,13 +219,15 @@ class _AppEntryState extends State<_AppEntry> {
   void didChangeDependencies() {
     super.didChangeDependencies();
 
+    if (_didInit) return;
+
     final apiClient = context.read<ApiClient>();
-    final tenantProvider = context.watch<TenantProvider>();
+    final tenantProvider = context.read<TenantProvider>();
     final catalogProvider = context.read<CatalogProvider>();
-    final authProvider = context.watch<AuthProvider>();
-    final sellerAuthProvider = context.watch<SellerAuthProvider>();
+    final authProvider = context.read<AuthProvider>();
+    final sellerAuthProvider = context.read<SellerAuthProvider>();
     final sellerOnboardingProvider = context.read<SellerOnboardingProvider>();
-    final tenantModeProvider = context.watch<TenantModeProvider>();
+    final tenantModeProvider = context.read<TenantModeProvider>();
     final appSessionProvider = context.read<AppSessionProvider>();
 
     final storefrontTenant = tenantProvider.tenant;
@@ -239,37 +241,29 @@ class _AppEntryState extends State<_AppEntry> {
         ? sellerTenantSlug
         : (storefrontTenantSlug ?? '');
 
-    final sellerToken = sellerAuthProvider.token;
-    final customerToken = authProvider.token;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
 
-    final effectiveToken =
-        (sellerToken != null && sellerToken.trim().isNotEmpty)
-        ? sellerToken
-        : (customerToken != null && customerToken.trim().isNotEmpty)
-        ? customerToken
-        : null;
+      try {
+        if (activeTenantSlug.isNotEmpty) {
+          await apiClient.setTenantSlug(activeTenantSlug);
+        }
 
-    final tenantChanged =
-        activeTenantSlug.isNotEmpty && activeTenantSlug != _lastTenantSlug;
-    final tokenChanged = effectiveToken != _lastAppliedAuthToken;
+        final sellerToken = sellerAuthProvider.token;
+        final customerToken = authProvider.token;
 
-    if (activeTenantSlug.isNotEmpty &&
-        (tenantChanged || tokenChanged || !_didInit)) {
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        if (!mounted) return;
-
-        await apiClient.setTenantSlug(activeTenantSlug);
+        final effectiveToken =
+            (sellerToken != null && sellerToken.trim().isNotEmpty)
+            ? sellerToken
+            : (customerToken != null && customerToken.trim().isNotEmpty)
+            ? customerToken
+            : null;
 
         if (effectiveToken != null && effectiveToken.trim().isNotEmpty) {
           await apiClient.setAuthToken(effectiveToken);
         } else {
           await apiClient.clearAuthToken();
         }
-
-        _lastTenantSlug = activeTenantSlug;
-        _lastAppliedAuthToken = effectiveToken;
-
-        if (!mounted) return;
 
         await appSessionProvider.initialize(
           tenantSlug: activeTenantSlug,
@@ -281,24 +275,29 @@ class _AppEntryState extends State<_AppEntry> {
 
         if (!mounted) return;
 
-        if (!sellerAuthProvider.isAuthenticated) {
+        if (activeTenantSlug.isNotEmpty &&
+            !sellerAuthProvider.isAuthenticated) {
           await catalogProvider.loadCatalogForTenant(activeTenantSlug);
-          if (!mounted) return;
         }
+
+        if (!mounted) return;
 
         await _resolveInitialMode(
           authProvider: authProvider,
           sellerAuthProvider: sellerAuthProvider,
           tenantModeProvider: tenantModeProvider,
         );
+      } catch (e, st) {
+        debugPrint('AppEntry init error: $e');
+        debugPrintStack(stackTrace: st);
+      }
 
-        if (mounted) {
-          setState(() {
-            _didInit = true;
-          });
-        }
-      });
-    }
+      if (mounted) {
+        setState(() {
+          _didInit = true;
+        });
+      }
+    });
   }
 
   Future<void> _resolveInitialMode({
