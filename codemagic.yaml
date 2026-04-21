@@ -113,7 +113,7 @@ workflows:
           dart run flutter_native_splash:create
 
       - name: Install CocoaPods
-        script: find . -name "Podfile" -execdir pod install \;
+        script: cd ios && pod install
 
       - name: Analyze
         script: flutter analyze --no-fatal-infos || true
@@ -132,8 +132,8 @@ workflows:
           find "$CM_BUILD_DIR/build/ios" -maxdepth 4 -type f | sort || true
 
     artifacts:
-      - $CM_BUILD_DIR/build/ios/ipa/*.ipa
-      - $CM_BUILD_DIR/build/ios/archive/*.xcarchive
+      - build/ios/ipa/*.ipa
+      - build/ios/archive/*.xcarchive
       - /tmp/xcodebuild_logs/*.log
       - flutter_drive.log
 
