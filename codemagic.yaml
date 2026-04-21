@@ -118,6 +118,7 @@ workflows:
         script: |
           cd ios
           pod install
+          cd ..
 
       - name: Analyze
         script: |
@@ -127,16 +128,23 @@ workflows:
         script: |
           flutter test
 
+      - name: Verify bundle identifier
+        script: |
+          echo "Expected bundle id: $BUNDLE_ID"
+          echo "Project bundle ids:"
+          grep -n "PRODUCT_BUNDLE_IDENTIFIER" ios/Runner.xcodeproj/project.pbxproj || true
+          echo "Info.plist bundle id:"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" ios/Runner/Info.plist || true
+          echo "Entitlements files:"
+          find ios -name "*.entitlements" -print || true
+
       - name: Build iOS IPA
         script: |
-          set -e
+          set -euo pipefail
           xcode-project use-profiles
           flutter clean
           flutter pub get
-          flutter build ipa --release --export-method app-store
-
-          echo "CM_BUILD_DIR=$CM_BUILD_DIR"
-          echo "PWD=$(pwd)"
+          flutter build ipa --release --export-method app-store --verbose | tee /tmp/flutter_build_ipa.log
 
           echo "Searching repo for IPA files..."
           find . -type f -name "*.ipa" | sort || true
@@ -145,7 +153,10 @@ workflows:
           find "$CM_BUILD_DIR" -type f -name "*.ipa" | sort || true
 
           echo "Listing build/ios contents..."
-          find build/ios -maxdepth 5 -type f | sort || true
+          find build/ios -maxdepth 6 -type f | sort || true
+
+          echo "Xcode logs..."
+          find /tmp/xcodebuild_logs -type f | sort || true
 
           test -n "$(find . -type f -name '*.ipa' -print -quit)" || {
             echo "No IPA produced by flutter build ipa"
@@ -159,6 +170,7 @@ workflows:
       - build/ios/archive/*.xcarchive
       - $CM_BUILD_DIR/**/build/ios/archive/*.xcarchive
       - /tmp/xcodebuild_logs/*.log
+      - /tmp/flutter_build_ipa.log
       - flutter_drive.log
 
     publishing:

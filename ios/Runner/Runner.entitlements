@@ -4,10 +4,10 @@
 <plist version="1.0">
 <dict>
 
-<key>com.apple.developer.in-app-payments</key>
+<!--key>com.apple.developer.in-app-payments</key>
 <array>
 <string>merchant.com.teesams.teesamsMarket</string>
-</array>
+</array-->
 
 </dict>
 </plist>
