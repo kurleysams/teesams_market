@@ -142,7 +142,6 @@ workflows:
         script: |
           xcode-project use-profiles \
             --project ios/Runner.xcodeproj \
-            --scheme Runner \
             --archive-method app-store \
             --code-signing-setup-verbose-logging
 
