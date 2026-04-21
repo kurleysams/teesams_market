@@ -138,11 +138,16 @@ workflows:
           echo "Entitlements files:"
           find ios -name "*.entitlements" -print || true
 
+      - name: Configure code signing
+        script: |
+          xcode-project use-profiles \
+            --project ios/Runner.xcodeproj \
+            --archive-method app-store \
+            --code-signing-setup-verbose-logging
+
       - name: Build iOS IPA
         script: |
           set -euo pipefail
-
-          xcode-project use-profiles
 
           flutter clean
           flutter pub get
