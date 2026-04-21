@@ -67,8 +67,5 @@
 
 		<key>NSCameraUsageDescription</key>
 		<string>This app uses the camera to scan payment cards.</string>
-
-		<key>NSApplePayUsageDescription</key>
-		<string>This app uses Apple Pay for secure payments.</string>
 	</dict>
 </plist>
