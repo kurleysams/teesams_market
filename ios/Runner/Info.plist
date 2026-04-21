@@ -67,5 +67,8 @@
 
 		<key>NSCameraUsageDescription</key>
 		<string>This app uses the camera to scan payment cards.</string>
+
+		<key>NSPhotoLibraryUsageDescription</key>
+		<string>This app needs access to your photo library so you can choose and upload product images.</string>
 	</dict>
 </plist>
