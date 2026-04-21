@@ -142,8 +142,31 @@ workflows:
         script: |
           xcode-project use-profiles \
             --project ios/Runner.xcodeproj \
+            --scheme Runner \
             --archive-method app-store \
             --code-signing-setup-verbose-logging
+
+      - name: Create ExportOptions.plist
+        script: |
+          cat > /tmp/ExportOptions.plist <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>app-store</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>teamID</key>
+            <string>72FK28VS65</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>com.teesams.teesamsMarket</key>
+              <string>Teesams Market Store</string>
+            </dict>
+          </dict>
+          </plist>
+          EOF
 
       - name: Build iOS IPA
         script: |
@@ -152,7 +175,7 @@ workflows:
           flutter clean
           flutter pub get
 
-          flutter build ipa --release --export-method app-store --verbose 2>&1 | tee /tmp/flutter_build_ipa.log
+          flutter build ipa --release --export-options-plist=/tmp/ExportOptions.plist --verbose 2>&1 | tee /tmp/flutter_build_ipa.log
 
           echo "==== IPA search ===="
           find . -type f -name "*.ipa" | sort || true
