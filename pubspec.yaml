@@ -3,7 +3,7 @@ description: "Teesams Market – a marketplace app for fresh seafood, groceries,
 
 publish_to: 'none'
 
-version: 1.0.1+21
+version: 1.0.1+22
 
 environment:
   sdk: ^3.11.0
